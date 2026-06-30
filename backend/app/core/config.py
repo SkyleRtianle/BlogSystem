@@ -16,7 +16,10 @@ class Settings:
 
     def __post_init__(self) -> None:
         if self.cors_origins is None:
-            origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+            origins = os.getenv(
+                "CORS_ORIGINS",
+                "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002",
+            )
             object.__setattr__(self, "cors_origins", _split_csv(origins))
 
 
