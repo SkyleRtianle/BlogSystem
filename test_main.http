@@ -1,4 +1,5 @@
-# Test your FastAPI endpoints
+# Test your FastAPI endpoints.
+# The backend project also has a copy at backend/test_main.http.
 
 GET http://127.0.0.1:8000/
 Accept: application/json

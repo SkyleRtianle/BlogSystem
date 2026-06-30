@@ -11,6 +11,7 @@ class Settings:
     app_name: str = os.getenv("APP_NAME", "BlogSystem")
     app_env: str = os.getenv("APP_ENV", "development")
     api_prefix: str = os.getenv("API_PREFIX", "/api")
+    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./blogsystem.db")
     cors_origins: list[str] = None
 
     def __post_init__(self) -> None:

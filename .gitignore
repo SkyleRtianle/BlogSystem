@@ -4,9 +4,20 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+*.db
+*.sqlite
 
 # Environment
 .env
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+build/
+next-env.d.ts
+*.tsbuildinfo
 
 # IDE / OS
 .DS_Store
