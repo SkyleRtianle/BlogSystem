@@ -1,0 +1,9 @@
+[project]
+name = "blogsystem"
+version = "0.1.0"
+description = "A personal blog system built step by step with FastAPI."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.138.2",
+    "uvicorn>=0.49.0",
+]
