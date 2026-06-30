@@ -3,6 +3,20 @@ from sqlmodel import Session, col, func, or_, select
 
 from app.core.config import settings
 from app.db.session import get_session
+from app.models.community import (
+    FriendLink,
+    FriendLinkCreate,
+    FriendLinkList,
+    FriendLinkRead,
+    Message,
+    MessageCreate,
+    MessageList,
+    MessageRead,
+    Photo,
+    PhotoCreate,
+    PhotoList,
+    PhotoRead,
+)
 from app.models.post import Post, PostCreate, PostList, PostRead
 from app.services.post_processing import build_summary, find_keyword_matches, generate_tags
 
@@ -79,3 +93,65 @@ async def get_post(post_id: int, session: Session = Depends(get_session)) -> Pos
     if post is None:
         raise HTTPException(status_code=404, detail="Post not found")
     return post
+
+
+@router.post("/links", response_model=FriendLinkRead, status_code=201)
+async def create_friend_link(
+    payload: FriendLinkCreate,
+    session: Session = Depends(get_session),
+) -> FriendLink:
+    link = FriendLink(
+        name=payload.name.strip(),
+        url=payload.url.strip(),
+        description=payload.description.strip(),
+    )
+    session.add(link)
+    session.commit()
+    session.refresh(link)
+    return link
+
+
+@router.get("/links", response_model=FriendLinkList)
+async def list_friend_links(session: Session = Depends(get_session)) -> FriendLinkList:
+    statement = select(FriendLink).order_by(col(FriendLink.created_at).desc())
+    links = session.exec(statement).all()
+    total = session.exec(select(func.count(FriendLink.id))).one()
+    return FriendLinkList(links=links, total=total)
+
+
+@router.post("/messages", response_model=MessageRead, status_code=201)
+async def create_message(payload: MessageCreate, session: Session = Depends(get_session)) -> Message:
+    message = Message(author=payload.author.strip(), content=payload.content.strip())
+    session.add(message)
+    session.commit()
+    session.refresh(message)
+    return message
+
+
+@router.get("/messages", response_model=MessageList)
+async def list_messages(session: Session = Depends(get_session)) -> MessageList:
+    statement = select(Message).order_by(col(Message.created_at).desc())
+    messages = session.exec(statement).all()
+    total = session.exec(select(func.count(Message.id))).one()
+    return MessageList(messages=messages, total=total)
+
+
+@router.post("/photos", response_model=PhotoRead, status_code=201)
+async def create_photo(payload: PhotoCreate, session: Session = Depends(get_session)) -> Photo:
+    photo = Photo(
+        title=payload.title.strip(),
+        image_url=payload.image_url.strip(),
+        description=payload.description.strip(),
+    )
+    session.add(photo)
+    session.commit()
+    session.refresh(photo)
+    return photo
+
+
+@router.get("/photos", response_model=PhotoList)
+async def list_photos(session: Session = Depends(get_session)) -> PhotoList:
+    statement = select(Photo).order_by(col(Photo.created_at).desc())
+    photos = session.exec(statement).all()
+    total = session.exec(select(func.count(Photo.id))).one()
+    return PhotoList(photos=photos, total=total)
