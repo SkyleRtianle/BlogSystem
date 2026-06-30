@@ -24,3 +24,57 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+button,
+input {
+  font: inherit;
+}
+
+.auth-background {
+  position: absolute;
+  inset: -22px;
+  background-image: url("/images/auth-background.png");
+  background-size: cover;
+  background-position: center;
+  filter: blur(12px) saturate(1.08);
+  transform: scale(1.04);
+}
+
+.auth-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("/images/auth-background.png");
+  background-size: cover;
+  background-position: center;
+  opacity: 0.42;
+  filter: blur(1px);
+}
+
+.auth-input {
+  height: 44px;
+  width: 100%;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.28);
+  background: rgb(255 255 255 / 0.14);
+  padding: 0 18px;
+  color: white;
+  outline: none;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.auth-input::placeholder {
+  color: rgb(255 255 255 / 0.48);
+}
+
+.auth-input:focus {
+  border-color: rgb(255 255 255 / 0.72);
+  background: rgb(255 255 255 / 0.2);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    0 0 0 4px rgb(255 255 255 / 0.12);
+}
