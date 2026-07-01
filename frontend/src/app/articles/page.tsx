@@ -9,8 +9,9 @@ import {
   redirectToLogin,
   requireAuthToken,
   useAuthUser,
-  type AuthUser,
 } from "@/lib/auth";
+import SiteHeader from "@/components/SiteHeader";
+import { useAppSettings } from "@/lib/useAppSettings";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
 
@@ -34,6 +35,7 @@ type EditorState = {
 };
 
 export default function ArticlesPage() {
+  const { isNight, showWallpaper, glassAlpha, setGlassAlpha, toggleNight, toggleWallpaper } = useAppSettings();
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [totalPosts, setTotalPosts] = useState(0);
@@ -149,9 +151,10 @@ export default function ArticlesPage() {
   }, []);
 
   return (
-    <main className="home-shell min-h-screen text-slate-900">
-      <SimpleHeader active="文章" user={currentUser} onLogout={logout} />
-      <section className="relative z-10 mx-auto grid max-w-[1600px] gap-5 px-4 py-6 sm:px-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1.85fr)]">
+    <main className={`home-shell min-h-screen ${isNight ? "home-night bg-black text-slate-100" : !showWallpaper ? "bg-white text-slate-900" : "text-slate-900"}`} style={{ "--glass-alpha": glassAlpha } as React.CSSProperties}>
+      {showWallpaper && !isNight && <div className="home-global-wallpaper" style={{ filter: "blur(12px) saturate(0.82)" }} />}
+      <SiteHeader active="文章" isNight={isNight} showWallpaper={showWallpaper} glassAlpha={glassAlpha} onGlassAlphaChange={setGlassAlpha} onToggleNight={toggleNight} onToggleWallpaper={toggleWallpaper} user={currentUser} onLogout={logout} />
+      <section className="relative z-10 mx-auto grid max-w-[1600px] gap-5 px-[80px] py-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1.85fr)]">
         <aside className="space-y-5 xl:sticky xl:top-24 xl:self-start">
           <ArticleComposer
             editor={editor}
@@ -184,52 +187,6 @@ export default function ArticlesPage() {
         </section>
       </section>
     </main>
-  );
-}
-
-function SimpleHeader({
-  active,
-  user,
-  onLogout,
-}: {
-  active: string;
-  user: AuthUser | null;
-  onLogout: () => void;
-}) {
-  const items = [
-    { label: "主页", href: "/home" },
-    { label: "文章", href: "/articles" },
-    { label: "照片墙", href: "/photos" },
-    { label: "友链", href: "/links" },
-    { label: "留言", href: "/messages" },
-  ];
-
-  return (
-    <header className="sticky top-0 z-40 mx-auto max-w-[1720px] px-4 pt-3 sm:px-6">
-      <nav className="home-nav flex min-h-16 items-center justify-between gap-4 px-4 sm:px-6">
-        <Link href="/home" className="flex items-center gap-3">
-          <span className="grid size-9 place-items-center rounded-xl bg-emerald-100 text-lg font-bold text-emerald-600">S</span>
-          <span className="text-lg font-bold">Skyler Blog</span>
-        </Link>
-        <div className="flex flex-wrap items-center gap-3 text-sm font-semibold">
-          {items.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={`rounded-xl px-3 py-2 transition ${
-                active === item.label ? "bg-emerald-500 text-white" : "hover:bg-emerald-50 hover:text-emerald-600"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-          {user && <span className="max-w-32 truncate text-slate-700">{user.nickname || user.email}</span>}
-          <button type="button" onClick={onLogout} className="rounded-xl px-3 py-2 transition hover:bg-emerald-50 hover:text-emerald-600">
-            退出
-          </button>
-        </div>
-      </nav>
-    </header>
   );
 }
 

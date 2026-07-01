@@ -97,6 +97,7 @@ textarea {
   --glass-rgb: 15 23 42;
   --glass-border-rgb: 148 163 184;
   --home-muted: rgb(203 213 225 / 0.72);
+  background: #000 !important;
 }
 
 .home-global-wallpaper {
