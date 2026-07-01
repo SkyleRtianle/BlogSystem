@@ -1,10 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TouchEvent, WheelEvent } from "react";
-
-type HomeMode = "wallpaper" | "night";
+import {
+  authHeaders,
+  clearAuthSession,
+  ensureAuthorized,
+  redirectToLogin,
+  requireAuthToken,
+  useAuthUser,
+  type AuthUser,
+} from "@/lib/auth";
 
 type BlogPost = {
   id: number;
@@ -30,37 +38,57 @@ const navItems = [
   { label: "关于", href: "/home" },
 ];
 
-const modeItems: Array<{ key: HomeMode; label: string }> = [
-  { key: "wallpaper", label: "壁纸" },
-  { key: "night", label: "夜间" },
-];
-
 const siteInfo = [
   ["构建平台", "Local Dev"],
   ["博客版本", "Skyler v0.2.0"],
-  ["文章许可", "CC BY-NC-SA 4.0"],
+  ["技术栈", "Next.js + FastAPI + PostgreSQL"],
 ];
 
 const calendarDays = Array.from({ length: 30 }, (_, index) => index + 1);
 
+function loadPref(key: string, fallback: string) {
+  if (typeof window === "undefined") return fallback;
+  return localStorage.getItem(`home_${key}`) ?? fallback;
+}
+
 export default function HomePage() {
-  const [mode, setMode] = useState<HomeMode>("wallpaper");
-  const [wallpaperEntered, setWallpaperEntered] = useState(false);
+  const [isNight, setIsNight] = useState(() => loadPref("isNight", "false") === "true");
+  const [showWallpaper, setShowWallpaper] = useState(() => loadPref("showWallpaper", "true") === "true");
+  const [glassAlpha, setGlassAlpha] = useState(() => parseFloat(loadPref("glassAlpha", "0.72")));
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [totalPosts, setTotalPosts] = useState(0);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
+  const [postsError, setPostsError] = useState("");
+  const currentUser = useAuthUser();
+  const router = useRouter();
   const touchStartY = useRef<number | null>(null);
+  const [ripples, setRipples] = useState<Array<{ id: number; x: number; y: number }>>([]);
+  const rippleId = useRef(0);
 
   const fetchPosts = useCallback(async () => {
+    const token = requireAuthToken();
+    if (!token) {
+      setIsLoadingPosts(false);
+      return;
+    }
+
     setIsLoadingPosts(true);
+    setPostsError("");
     try {
-      const response = await fetch(`${API_BASE_URL}/posts`);
+      const response = await fetch(`${API_BASE_URL}/posts`, {
+        headers: authHeaders(token),
+      });
+      ensureAuthorized(response);
       if (!response.ok) {
         throw new Error("文章列表加载失败");
       }
       const data: { posts: BlogPost[]; total: number } = await response.json();
       setPosts(data.posts);
       setTotalPosts(data.total);
+    } catch (error) {
+      setPosts([]);
+      setTotalPosts(0);
+      setPostsError(error instanceof Error ? error.message : "文章列表加载失败");
     } finally {
       setIsLoadingPosts(false);
     }
@@ -70,74 +98,55 @@ export default function HomePage() {
     const timer = window.setTimeout(() => {
       void fetchPosts();
     }, 0);
-
     return () => window.clearTimeout(timer);
   }, [fetchPosts]);
 
-  const selectMode = useCallback((nextMode: HomeMode) => {
-    setMode(nextMode);
-    setWallpaperEntered(false);
+  useEffect(() => { localStorage.setItem("home_isNight", String(isNight)); }, [isNight]);
+  useEffect(() => { localStorage.setItem("home_showWallpaper", String(showWallpaper)); }, [showWallpaper]);
+  useEffect(() => { localStorage.setItem("home_glassAlpha", String(glassAlpha)); }, [glassAlpha]);
+
+  const handlePageClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
+    const id = rippleId.current++;
+    setRipples((prev) => [...prev, { id, x: e.clientX, y: e.clientY }]);
+    setTimeout(() => setRipples((prev) => prev.filter((r) => r.id !== id)), 900);
   }, []);
 
-  const enterWallpaperContent = useCallback(() => {
-    if (mode === "wallpaper") {
-      setWallpaperEntered(true);
-    }
-  }, [mode]);
-
-  const showWallpaperStage = useCallback(() => {
-    setMode("wallpaper");
-    setWallpaperEntered(false);
+  const toggleNight = useCallback(() => {
+    setIsNight((prev) => !prev);
   }, []);
 
-  const handleWallpaperWheel = useCallback(
+  const logout = useCallback(() => {
+    clearAuthSession();
+    redirectToLogin();
+  }, []);
+
+  const goWallpaper = useCallback(() => {
+    router.push("/wallpaper");
+  }, [router]);
+
+  const handleTopWheel = useCallback(
     (event: WheelEvent<HTMLElement>) => {
-      if (event.deltaY > 18) {
-        enterWallpaperContent();
+      if (event.deltaY < -80 && window.scrollY <= 3) {
+        goWallpaper();
       }
     },
-    [enterWallpaperContent],
+    [goWallpaper],
   );
 
-  const handleContentWheel = useCallback(
-    (event: WheelEvent<HTMLElement>) => {
-      if (event.deltaY < -60 && window.scrollY <= 20) {
-        showWallpaperStage();
-      }
-    },
-    [showWallpaperStage],
-  );
-
-  const handleTouchStart = useCallback((event: TouchEvent<HTMLElement>) => {
+  const handleTopTouchStart = useCallback((event: TouchEvent<HTMLElement>) => {
     touchStartY.current = event.touches[0]?.clientY ?? null;
   }, []);
 
-  const handleTouchEnd = useCallback(
+  const handleTopTouchEnd = useCallback(
     (event: TouchEvent<HTMLElement>) => {
       const startY = touchStartY.current;
       const endY = event.changedTouches[0]?.clientY;
       touchStartY.current = null;
-
-      if (startY == null || endY == null) return;
-      if (endY - startY > 42) {
-        enterWallpaperContent();
+      if (startY != null && endY != null && startY - endY > 100 && window.scrollY <= 3) {
+        goWallpaper();
       }
     },
-    [enterWallpaperContent],
-  );
-
-  const handleContentTouchEnd = useCallback(
-    (event: TouchEvent<HTMLElement>) => {
-      const startY = touchStartY.current;
-      const endY = event.changedTouches[0]?.clientY;
-      touchStartY.current = null;
-
-      if (startY == null || endY == null) return;
-      if (startY - endY > 42 && window.scrollY <= 20) {
-        showWallpaperStage();
-      }
-    },
-    [showWallpaperStage],
+    [goWallpaper],
   );
 
   const categories = useMemo(() => {
@@ -152,101 +161,109 @@ export default function HomePage() {
   const homeStats = useMemo(() => {
     const tags = new Set(posts.flatMap((post) => post.tags));
     const wordCount = posts.reduce((sum, post) => sum + post.content.length, 0);
+    const latest = posts[0];
 
     return [
       ["文章", String(totalPosts)],
       ["分类", String(categories.length)],
       ["标签", String(tags.size)],
       ["总字数", wordCount.toLocaleString()],
-      ["运行时长", "541 天"],
-      ["最后活动", posts[0] ? formatDate(posts[0].created_at) : "暂无"],
+      ["最新文章", latest ? latest.title : "暂无"],
+      ["最近分类", latest?.category ?? "暂无"],
+      ["最后活动", latest ? formatDate(latest.created_at) : "暂无"],
     ];
   }, [categories.length, posts, totalPosts]);
 
-  const hasWallpaper = mode === "wallpaper";
-  const showHero = mode === "wallpaper" && !wallpaperEntered;
-
   const shellClass = useMemo(() => {
     const base = "home-shell min-h-screen";
-    if (mode === "night") return `${base} home-night bg-slate-950 text-slate-100`;
+    if (isNight) return `${base} home-night bg-slate-950 text-slate-100`;
     return `${base} text-slate-900`;
-  }, [mode]);
+  }, [isNight]);
 
   return (
-    <main className={shellClass}>
-      {hasWallpaper && (
-        <>
-          <div className="home-global-wallpaper" />
-          <div className="home-hero-veil" />
-        </>
+    <main
+      className={shellClass}
+      style={{ "--glass-alpha": glassAlpha } as React.CSSProperties}
+      onWheel={handleTopWheel}
+      onTouchStart={handleTopTouchStart}
+      onTouchEnd={handleTopTouchEnd}
+      onClick={handlePageClick}
+    >
+      {ripples.map((r) => (
+        <span
+          key={r.id}
+          className="pointer-events-none fixed z-20 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/20 animate-[ripple_900ms_ease-out_forwards]"
+          style={{ left: r.x, top: r.y, width: 8, height: 8 }}
+        />
+      ))}
+      {showWallpaper && (
+        <div
+          className="home-global-wallpaper"
+          style={{ filter: "blur(12px) saturate(0.82)" }}
+        />
       )}
 
-      <SiteHeader mode={mode} onSelectMode={selectMode} />
-
-      {mode === "wallpaper" && (
-        <section
-          onWheel={handleWallpaperWheel}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          className={`home-wallpaper-stage relative z-10 flex min-h-[calc(100vh-88px)] items-center justify-center px-6 text-center ${
-            wallpaperEntered ? "home-wallpaper-stage-exit pointer-events-none" : ""
-          }`}
-        >
-          <div className="drop-shadow-[0_10px_24px_rgba(15,23,42,0.38)]">
-            <h1 className="text-5xl font-bold text-white sm:text-7xl">Skyler Blog</h1>
-            <p className="mt-5 text-xl font-medium text-white/92 sm:text-2xl">
-              From every quiet day, I write and shine.
-            </p>
-            <button
-              type="button"
-              onClick={enterWallpaperContent}
-              className="mt-20 text-5xl font-light text-white/90 transition hover:translate-y-1"
-              aria-label="进入内容"
-            >
-              ⌄
-            </button>
-            <p className="mt-3 text-sm font-medium text-white/75">向下滑动进入主页</p>
-          </div>
-        </section>
-      )}
+      <SiteHeader
+        isNight={isNight}
+        showWallpaper={showWallpaper}
+        user={currentUser}
+        glassAlpha={glassAlpha}
+        onGlassAlphaChange={setGlassAlpha}
+        onToggleNight={toggleNight}
+        onToggleWallpaper={() => setShowWallpaper((v) => !v)}
+        onLogout={logout}
+      />
 
       <section
-        onWheel={handleContentWheel}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleContentTouchEnd}
-        className={`relative z-10 px-4 pb-16 sm:px-6 ${
-          showHero ? "home-content-after-wallpaper pointer-events-none opacity-0" : "pt-6"
-        } ${mode === "wallpaper" && wallpaperEntered ? "home-content-enter" : ""}`}
+        className="home-content-panel relative z-10 px-[80px] pb-16 mt-[380px] pt-8"
       >
-        <div className="mx-auto grid max-w-[1700px] gap-5 xl:grid-cols-[minmax(240px,1fr)_minmax(0,2fr)_minmax(240px,1fr)]">
-          <aside className="space-y-5 xl:sticky xl:top-24 xl:self-start">
+        <div className="home-dashboard-grid mx-auto grid max-w-[1700px] gap-5 xl:grid-cols-[1fr_3fr_1fr]">
+          <aside className="home-static-column space-y-5 xl:self-start">
             <ProfileCard />
             <NoticeCard />
-            <CategoryCard categories={categories} />
           </aside>
 
-          <section className="space-y-5">
-            <HomeDashboard posts={posts} isLoading={isLoadingPosts} totalPosts={totalPosts} />
-            <LatestPosts posts={posts} isLoading={isLoadingPosts} />
+          <section data-home-scroll-column className="home-scroll-column space-y-5">
+            <LatestPosts posts={posts} isLoading={isLoadingPosts} error={postsError} categories={categories} />
           </section>
 
-          <aside className="space-y-5 xl:sticky xl:top-24 xl:self-start">
+          <aside className="home-static-column space-y-5 xl:self-start">
             <CalendarCard />
             <StatsCard stats={homeStats} />
-            <SiteInfoCard />
           </aside>
         </div>
       </section>
+
+      <footer className="relative z-10 mt-8 pb-6 text-center text-sm text-slate-500">
+        {siteInfo.map(([label, value], i) => (
+          <span key={label}>
+            {label}：{value}
+            {i < siteInfo.length - 1 && <span className="mx-4">·</span>}
+          </span>
+        ))}
+      </footer>
     </main>
   );
 }
 
 function SiteHeader({
-  mode,
-  onSelectMode,
+  isNight,
+  showWallpaper,
+  user,
+  glassAlpha,
+  onGlassAlphaChange,
+  onToggleNight,
+  onToggleWallpaper,
+  onLogout,
 }: {
-  mode: HomeMode;
-  onSelectMode: (nextMode: HomeMode) => void;
+  isNight: boolean;
+  showWallpaper: boolean;
+  user: AuthUser | null;
+  glassAlpha: number;
+  onGlassAlphaChange: (value: number) => void;
+  onToggleNight: () => void;
+  onToggleWallpaper: () => void;
+  onLogout: () => void;
 }) {
   return (
     <header className="sticky top-0 z-40 mx-auto max-w-[1720px] px-4 pt-3 sm:px-6">
@@ -267,90 +284,136 @@ function SiteHeader({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          {user && (
+            <span className="hidden max-w-32 truncate text-sm font-semibold text-slate-800 sm:inline">
+              {user.nickname || user.email}
+            </span>
+          )}
           <Link
             href="/articles"
-            className="hidden h-11 items-center rounded-xl bg-slate-100/70 px-4 text-sm font-semibold text-slate-500 transition hover:text-emerald-500 xl:flex"
+            className="hidden h-11 items-center rounded-xl bg-slate-100/70 px-4 text-sm font-semibold text-slate-700 transition hover:text-emerald-500 xl:flex"
           >
             搜索文章
           </Link>
           <div className="hidden rounded-xl bg-white/30 p-1 shadow-inner md:flex">
-            {modeItems.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => onSelectMode(item.key)}
-                className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                  mode === item.key
-                    ? "bg-emerald-500 text-white shadow-sm"
-                    : "text-slate-600 hover:bg-white/55"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
+            <button
+              type="button"
+              onClick={onToggleWallpaper}
+              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
+                !showWallpaper
+                  ? "bg-emerald-500 text-white shadow-sm"
+                  : "text-slate-800 hover:bg-white/55"
+              }`}
+            >
+              纯色
+            </button>
+            <button
+              type="button"
+              onClick={onToggleNight}
+              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
+                isNight
+                  ? "bg-emerald-500 text-white shadow-sm"
+                  : "text-slate-800 hover:bg-white/55"
+              }`}
+            >
+              夜间
+            </button>
           </div>
+          <div className="hidden items-center gap-2 md:flex">
+            <span className="text-xs font-semibold text-slate-600">玻璃度</span>
+            <input
+              type="range"
+              min="0.1"
+              max="0.95"
+              step="0.01"
+              value={glassAlpha}
+              onChange={(e) => onGlassAlphaChange(parseFloat(e.target.value))}
+              className="glass-slider"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="rounded-xl bg-slate-100/70 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:text-emerald-500"
+          >
+            退出
+          </button>
         </div>
       </nav>
     </header>
   );
 }
 
-function HomeDashboard({
+function LatestPosts({
   posts,
   isLoading,
-  totalPosts,
+  error,
+  categories,
 }: {
   posts: BlogPost[];
   isLoading: boolean;
-  totalPosts: number;
+  error: string;
+  categories: Array<{ name: string; count: number }>;
 }) {
-  const latest = posts[0];
+  const tags = useMemo(() => {
+    const counts: Record<string, number> = {};
+    posts.forEach((post) => post.tags.forEach((tag) => {
+      counts[tag] = (counts[tag] ?? 0) + 1;
+    }));
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 12);
+  }, [posts]);
 
-  return (
-    <section className="home-card p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold text-emerald-500">站点概览</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-normal text-slate-900">
-            记录文章、照片、友链与留言的个人博客空间
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
-            首页用于展示博客状态、最新内容和站点信息；文章发布、检索和管理已移动到文章页面。
-          </p>
-        </div>
-        <Link href="/articles" className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-600">
-          去写文章
-        </Link>
-      </div>
-
-      <div className="mt-6 grid gap-3 md:grid-cols-3">
-        {[
-          ["文章总数", String(totalPosts)],
-          ["最新文章", latest ? latest.title : isLoading ? "加载中" : "暂无文章"],
-          ["最近分类", latest?.category ?? "暂无"],
-        ].map(([label, value]) => (
-          <div key={label} className="rounded-2xl bg-white/55 p-4">
-            <p className="text-xs font-bold text-slate-400">{label}</p>
-            <strong className="mt-2 block truncate text-lg text-slate-900">{value}</strong>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function LatestPosts({ posts, isLoading }: { posts: BlogPost[]; isLoading: boolean }) {
   return (
     <section className="space-y-5">
-      <div className="home-card flex flex-wrap items-center justify-between gap-3 p-4">
-        <h2 className="home-section-title">最新文章</h2>
-        <Link href="/articles" className="home-pill-button">查看全部</Link>
+      <div className="home-card space-y-4 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="home-section-title">最新文章</h2>
+          <Link href="/articles" className="home-pill-button">查看全部</Link>
+        </div>
+
+        {categories.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-slate-600">分类：</span>
+            {categories.map((cat) => (
+              <Link
+                key={cat.name}
+                href={`/articles?category=${encodeURIComponent(cat.name)}`}
+                className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-100"
+              >
+                {cat.name} ({cat.count})
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {tags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-600">标签：</span>
+            {tags.map(([tag, count]) => (
+              <Link
+                key={tag}
+                href={`/articles?tag=${encodeURIComponent(tag)}`}
+                className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-600"
+              >
+                {tag} ({count})
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
+
       {isLoading && (
-        <div className="home-card p-6 text-sm font-semibold text-slate-500">正在加载文章...</div>
+        <div className="home-card p-6 text-sm font-semibold text-slate-700">正在加载文章...</div>
       )}
-      {!isLoading && posts.length === 0 && (
-        <div className="home-card p-6 text-sm leading-7 text-slate-500">
+      {!isLoading && error && (
+        <div className="home-card p-6 text-sm leading-7 text-slate-700">
+          {error}。请确认后端服务正在运行。
+        </div>
+      )}
+      {!isLoading && !error && posts.length === 0 && (
+        <div className="home-card p-6 text-sm leading-7 text-slate-700">
           还没有文章。进入文章页面后，可以发布第一篇 Markdown 博客。
         </div>
       )}
@@ -369,9 +432,9 @@ function ProfileCard() {
       </div>
       <h2 className="mt-5 text-2xl font-bold">Skyler</h2>
       <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-emerald-400" />
-      <p className="mt-4 text-sm text-slate-500">Hello, I am Skyler.</p>
-      <div className="mt-5 grid grid-cols-4 gap-3">
-        {["Git", "Hub", "Mail", "RSS"].map((item) => (
+      <p className="mt-4 text-sm text-slate-700">Hello, I am Skyler.</p>
+      <div className="mt-5 grid grid-cols-3 gap-3">
+        {["Github", "Mail", "QQ"].map((item) => (
           <button key={item} type="button" className="home-soft-button">
             {item}
           </button>
@@ -385,25 +448,9 @@ function NoticeCard() {
   return (
     <div className="home-card p-5">
       <h2 className="home-section-title">公告</h2>
-      <p className="mt-4 text-sm leading-7 text-slate-500">
+      <p className="mt-4 text-sm leading-7 text-slate-700">
         欢迎来到我的博客！页面骨架已拆分为首页、文章、照片墙、友链和留言，后续可以继续细化权限、详情页和后台管理。
       </p>
-    </div>
-  );
-}
-
-function CategoryCard({ categories }: { categories: Array<{ name: string; count: number }> }) {
-  return (
-    <div className="home-card p-5">
-      <h2 className="home-section-title">分类</h2>
-      <div className="mt-4 space-y-3 text-sm">
-        {(categories.length ? categories : [{ name: "未分类", count: 0 }]).map((category) => (
-          <div key={category.name} className="flex items-center justify-between">
-            <span>{category.name}</span>
-            <strong className="rounded-lg bg-emerald-50 px-2 py-1 text-emerald-600">{category.count}</strong>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -415,14 +462,14 @@ function PostCard({ post, index }: { post: BlogPost; index: number }) {
         <h2 className="border-l-4 border-emerald-400 pl-4 text-2xl font-bold leading-tight">
           {post.title}
         </h2>
-        <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-500">
+        <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-700">
           <span className="rounded-lg bg-emerald-50 px-3 py-1 font-medium text-emerald-600">
             最新
           </span>
           <span>{formatDate(post.created_at)}</span>
           <span>{post.category}</span>
         </div>
-        <p className="mt-4 text-sm leading-7 text-slate-600">{post.summary}</p>
+        <p className="mt-4 text-sm leading-7 text-slate-800">{post.summary}</p>
         <div className="mt-4 flex flex-wrap gap-2">
           {post.tags.map((tag) => (
             <span key={tag} className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
@@ -444,29 +491,13 @@ function PostCard({ post, index }: { post: BlogPost; index: number }) {
 
 function StatsCard({ stats }: { stats: string[][] }) {
   return (
-    <div className="home-card p-5">
+    <div className="home-card p-4">
       <h2 className="home-section-title">站点统计</h2>
-      <div className="mt-5 space-y-4">
+      <div className="mt-3 space-y-2">
         {stats.map(([label, value]) => (
-          <div key={label} className="flex items-center justify-between text-sm">
-            <span className="text-slate-500">{label}</span>
-            <strong className="text-base text-slate-900">{value}</strong>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SiteInfoCard() {
-  return (
-    <div className="home-card p-5">
-      <h2 className="home-section-title">站点信息</h2>
-      <div className="mt-5 space-y-3">
-        {siteInfo.map(([label, value]) => (
-          <div key={label} className="flex items-center justify-between rounded-xl bg-white/45 px-3 py-2 text-sm">
-            <span className="text-slate-500">{label}</span>
-            <strong>{value}</strong>
+          <div key={label} className="flex items-center justify-between text-xs">
+            <span className="text-slate-700">{label}</span>
+            <strong className="text-sm text-slate-900 truncate max-w-[120px]">{value}</strong>
           </div>
         ))}
       </div>
@@ -476,20 +507,20 @@ function SiteInfoCard() {
 
 function CalendarCard() {
   return (
-    <div className="home-card p-5">
+    <div className="home-card p-4">
       <div className="flex items-center justify-between">
         <button type="button">‹</button>
-        <h2 className="text-xl font-bold">2026年6月</h2>
+        <h2 className="text-base font-bold">2026年6月</h2>
         <button type="button">›</button>
       </div>
-      <div className="mt-5 grid grid-cols-7 gap-2 text-center text-sm text-slate-500">
+      <div className="mt-3 grid grid-cols-7 gap-1 text-center text-xs text-slate-700">
         {["日", "一", "二", "三", "四", "五", "六"].map((day) => (
           <span key={day}>{day}</span>
         ))}
         {calendarDays.map((day) => (
           <span
             key={day}
-            className={`rounded-lg py-1.5 ${day === 30 ? "border border-emerald-400 text-emerald-600" : ""}`}
+            className={`rounded py-1 ${day === 30 ? "border border-emerald-400 text-emerald-600 rounded-lg" : ""}`}
           >
             {day}
           </span>

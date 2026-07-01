@@ -2,6 +2,15 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  authHeaders,
+  clearAuthSession,
+  ensureAuthorized,
+  redirectToLogin,
+  requireAuthToken,
+  useAuthUser,
+  type AuthUser,
+} from "@/lib/auth";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
 
@@ -18,12 +27,26 @@ export default function LinksPage() {
   const [form, setForm] = useState({ name: "", url: "", description: "" });
   const [message, setMessage] = useState("提交友链后会保存到后端列表。");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const currentUser = useAuthUser();
 
   const fetchLinks = useCallback(async () => {
-    const response = await fetch(`${API_BASE_URL}/links`);
-    if (!response.ok) return;
-    const data: { links: FriendLink[]; total: number } = await response.json();
-    setLinks(data.links);
+    const token = requireAuthToken();
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/links`, {
+        headers: authHeaders(token),
+      });
+      ensureAuthorized(response);
+      if (!response.ok) {
+        throw new Error("友链列表加载失败");
+      }
+      const data: { links: FriendLink[]; total: number } = await response.json();
+      setLinks(data.links);
+    } catch (error) {
+      setLinks([]);
+      setMessage(error instanceof Error ? error.message : "友链列表加载失败");
+    }
   }, []);
 
   useEffect(() => {
@@ -44,11 +67,15 @@ export default function LinksPage() {
       setIsSubmitting(true);
       setMessage("正在提交友链...");
       try {
+        const token = requireAuthToken();
+        if (!token) return;
+
         const response = await fetch(`${API_BASE_URL}/links`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders(token) },
           body: JSON.stringify(form),
         });
+        ensureAuthorized(response);
         if (!response.ok) throw new Error("友链提交失败");
         const created: FriendLink = await response.json();
         setLinks((current) => [created, ...current]);
@@ -63,26 +90,31 @@ export default function LinksPage() {
     [form],
   );
 
+  const logout = useCallback(() => {
+    clearAuthSession();
+    redirectToLogin();
+  }, []);
+
   return (
     <main className="home-shell min-h-screen text-slate-900">
-      <SimpleHeader active="友链" />
+      <SimpleHeader active="友链" user={currentUser} onLogout={logout} />
       <section className="mx-auto grid max-w-[1400px] gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[420px_1fr]">
         <form onSubmit={submitLink} className="home-card p-5 lg:sticky lg:top-24 lg:self-start">
           <h1 className="home-section-title">友链申请</h1>
           <label className="mt-5 block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-500">站点名称</span>
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">站点名称</span>
             <input className="home-field" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
           </label>
           <label className="mt-3 block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-500">链接地址</span>
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">链接地址</span>
             <input className="home-field" value={form.url} onChange={(event) => setForm({ ...form, url: event.target.value })} placeholder="https://example.com" />
           </label>
           <label className="mt-3 block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-500">描述</span>
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">描述</span>
             <textarea className="home-field min-h-28 resize-y py-3" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
           </label>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-slate-500">{message}</p>
+            <p className="text-sm font-semibold text-slate-700">{message}</p>
             <button className="home-pill-button" disabled={isSubmitting} type="submit">
               {isSubmitting ? "提交中..." : "提交友链"}
             </button>
@@ -92,17 +124,17 @@ export default function LinksPage() {
         <section className="space-y-4">
           <div className="home-card flex items-center justify-between p-4">
             <h2 className="home-section-title">友链列表</h2>
-            <span className="text-sm font-semibold text-slate-500">共 {links.length} 个</span>
+            <span className="text-sm font-semibold text-slate-700">共 {links.length} 个</span>
           </div>
           {links.length === 0 && (
-            <div className="home-card p-6 text-sm leading-7 text-slate-500">暂无友链，提交后会显示在这里。</div>
+            <div className="home-card p-6 text-sm leading-7 text-slate-700">暂无友链，提交后会显示在这里。</div>
           )}
           <div className="grid gap-4 md:grid-cols-2">
             {links.map((item) => (
               <a key={item.id} href={item.url} target="_blank" rel="noreferrer" className="home-card block p-5 transition hover:-translate-y-0.5">
                 <h3 className="text-xl font-bold">{item.name}</h3>
                 <p className="mt-2 break-all text-sm text-emerald-600">{item.url}</p>
-                <p className="mt-3 text-sm leading-7 text-slate-600">{item.description || "这个站点暂时没有描述。"}</p>
+                <p className="mt-3 text-sm leading-7 text-slate-800">{item.description || "这个站点暂时没有描述。"}</p>
               </a>
             ))}
           </div>
@@ -112,7 +144,15 @@ export default function LinksPage() {
   );
 }
 
-function SimpleHeader({ active }: { active: string }) {
+function SimpleHeader({
+  active,
+  user,
+  onLogout,
+}: {
+  active: string;
+  user: AuthUser | null;
+  onLogout: () => void;
+}) {
   const items = [
     { label: "主页", href: "/home" },
     { label: "文章", href: "/articles" },
@@ -134,6 +174,10 @@ function SimpleHeader({ active }: { active: string }) {
               {item.label}
             </Link>
           ))}
+          {user && <span className="max-w-32 truncate text-slate-700">{user.nickname || user.email}</span>}
+          <button type="button" onClick={onLogout} className="rounded-xl px-3 py-2 transition hover:bg-emerald-50 hover:text-emerald-600">
+            退出
+          </button>
         </div>
       </nav>
     </header>

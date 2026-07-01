@@ -2,6 +2,15 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  authHeaders,
+  clearAuthSession,
+  ensureAuthorized,
+  redirectToLogin,
+  requireAuthToken,
+  useAuthUser,
+  type AuthUser,
+} from "@/lib/auth";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
 
@@ -18,12 +27,26 @@ export default function PhotosPage() {
   const [form, setForm] = useState({ title: "", image_url: "", description: "" });
   const [message, setMessage] = useState("添加照片链接后，会展示在照片墙。");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const currentUser = useAuthUser();
 
   const fetchPhotos = useCallback(async () => {
-    const response = await fetch(`${API_BASE_URL}/photos`);
-    if (!response.ok) return;
-    const data: { photos: Photo[]; total: number } = await response.json();
-    setPhotos(data.photos);
+    const token = requireAuthToken();
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/photos`, {
+        headers: authHeaders(token),
+      });
+      ensureAuthorized(response);
+      if (!response.ok) {
+        throw new Error("照片列表加载失败");
+      }
+      const data: { photos: Photo[]; total: number } = await response.json();
+      setPhotos(data.photos);
+    } catch (error) {
+      setPhotos([]);
+      setMessage(error instanceof Error ? error.message : "照片列表加载失败");
+    }
   }, []);
 
   useEffect(() => {
@@ -44,11 +67,15 @@ export default function PhotosPage() {
       setIsSubmitting(true);
       setMessage("正在添加照片...");
       try {
+        const token = requireAuthToken();
+        if (!token) return;
+
         const response = await fetch(`${API_BASE_URL}/photos`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders(token) },
           body: JSON.stringify(form),
         });
+        ensureAuthorized(response);
         if (!response.ok) throw new Error("照片添加失败");
         const created: Photo = await response.json();
         setPhotos((current) => [created, ...current]);
@@ -63,14 +90,19 @@ export default function PhotosPage() {
     [form],
   );
 
+  const logout = useCallback(() => {
+    clearAuthSession();
+    redirectToLogin();
+  }, []);
+
   return (
     <main className="home-shell min-h-screen text-slate-900">
-      <SimpleHeader active="照片墙" />
+      <SimpleHeader active="照片墙" user={currentUser} onLogout={logout} />
       <section className="mx-auto grid max-w-[1500px] gap-5 px-4 py-6 sm:px-6 xl:grid-cols-[420px_1fr]">
         <form onSubmit={submitPhoto} className="home-card p-5 xl:sticky xl:top-24 xl:self-start">
           <h1 className="home-section-title">添加照片</h1>
           <label className="mt-5 block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-500">照片标题</span>
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">照片标题</span>
             <input
               className="home-field"
               value={form.title}
@@ -79,7 +111,7 @@ export default function PhotosPage() {
             />
           </label>
           <label className="mt-3 block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-500">图片地址</span>
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">图片地址</span>
             <input
               className="home-field"
               value={form.image_url}
@@ -88,7 +120,7 @@ export default function PhotosPage() {
             />
           </label>
           <label className="mt-3 block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-500">描述</span>
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">描述</span>
             <textarea
               className="home-field min-h-28 resize-y py-3"
               value={form.description}
@@ -97,7 +129,7 @@ export default function PhotosPage() {
             />
           </label>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-slate-500">{message}</p>
+            <p className="text-sm font-semibold text-slate-700">{message}</p>
             <button className="home-pill-button" disabled={isSubmitting} type="submit">
               {isSubmitting ? "添加中..." : "加入照片墙"}
             </button>
@@ -107,10 +139,10 @@ export default function PhotosPage() {
         <section className="space-y-4">
           <div className="home-card flex items-center justify-between p-4">
             <h2 className="home-section-title">照片墙</h2>
-            <span className="text-sm font-semibold text-slate-500">共 {photos.length} 张</span>
+            <span className="text-sm font-semibold text-slate-700">共 {photos.length} 张</span>
           </div>
           {photos.length === 0 && (
-            <div className="home-card p-6 text-sm leading-7 text-slate-500">
+            <div className="home-card p-6 text-sm leading-7 text-slate-700">
               暂无照片。添加图片地址后，会以照片卡片形式展示在这里。
             </div>
           )}
@@ -124,9 +156,9 @@ export default function PhotosPage() {
                 <div className="p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <h3 className="text-xl font-bold">{photo.title}</h3>
-                    <span className="text-xs font-semibold text-slate-500">{formatDate(photo.created_at)}</span>
+                    <span className="text-xs font-semibold text-slate-700">{formatDate(photo.created_at)}</span>
                   </div>
-                  <p className="mt-3 text-sm leading-7 text-slate-600">
+                  <p className="mt-3 text-sm leading-7 text-slate-800">
                     {photo.description || "这张照片暂时没有描述。"}
                   </p>
                 </div>
@@ -139,7 +171,15 @@ export default function PhotosPage() {
   );
 }
 
-function SimpleHeader({ active }: { active: string }) {
+function SimpleHeader({
+  active,
+  user,
+  onLogout,
+}: {
+  active: string;
+  user: AuthUser | null;
+  onLogout: () => void;
+}) {
   const items = [
     { label: "主页", href: "/home" },
     { label: "文章", href: "/articles" },
@@ -161,6 +201,10 @@ function SimpleHeader({ active }: { active: string }) {
               {item.label}
             </Link>
           ))}
+          {user && <span className="max-w-32 truncate text-slate-700">{user.nickname || user.email}</span>}
+          <button type="button" onClick={onLogout} className="rounded-xl px-3 py-2 transition hover:bg-emerald-50 hover:text-emerald-600">
+            退出
+          </button>
         </div>
       </nav>
     </header>

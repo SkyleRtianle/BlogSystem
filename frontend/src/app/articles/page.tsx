@@ -2,6 +2,15 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  authHeaders,
+  clearAuthSession,
+  ensureAuthorized,
+  redirectToLogin,
+  requireAuthToken,
+  useAuthUser,
+  type AuthUser,
+} from "@/lib/auth";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
 
@@ -31,6 +40,7 @@ export default function ArticlesPage() {
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [isPublishing, setIsPublishing] = useState(false);
   const [message, setMessage] = useState("在这里发布 Markdown 文章，系统会自动处理标签。");
+  const currentUser = useAuthUser();
   const [editor, setEditor] = useState<EditorState>({
     title: "",
     category: "随笔",
@@ -39,6 +49,12 @@ export default function ArticlesPage() {
   });
 
   const fetchPosts = useCallback(async (keyword = "") => {
+    const token = requireAuthToken();
+    if (!token) {
+      setIsLoadingPosts(false);
+      return;
+    }
+
     setIsLoadingPosts(true);
     const params = new URLSearchParams();
     if (keyword.trim()) {
@@ -46,7 +62,10 @@ export default function ArticlesPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/posts?${params.toString()}`);
+      const response = await fetch(`${API_BASE_URL}/posts?${params.toString()}`, {
+        headers: authHeaders(token),
+      });
+      ensureAuthorized(response);
       if (!response.ok) {
         throw new Error("文章列表加载失败");
       }
@@ -80,9 +99,12 @@ export default function ArticlesPage() {
       setMessage("正在发布并自动生成标签...");
 
       try {
+        const token = requireAuthToken();
+        if (!token) return;
+
         const response = await fetch(`${API_BASE_URL}/posts`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders(token) },
           body: JSON.stringify({
             title: editor.title,
             content: editor.content,
@@ -94,6 +116,7 @@ export default function ArticlesPage() {
           }),
         });
 
+        ensureAuthorized(response);
         if (!response.ok) {
           throw new Error("发布失败，请检查后端服务是否运行");
         }
@@ -120,9 +143,14 @@ export default function ArticlesPage() {
     [fetchPosts, searchKeyword],
   );
 
+  const logout = useCallback(() => {
+    clearAuthSession();
+    redirectToLogin();
+  }, []);
+
   return (
     <main className="home-shell min-h-screen text-slate-900">
-      <SimpleHeader active="文章" />
+      <SimpleHeader active="文章" user={currentUser} onLogout={logout} />
       <section className="relative z-10 mx-auto grid max-w-[1600px] gap-5 px-4 py-6 sm:px-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1.85fr)]">
         <aside className="space-y-5 xl:sticky xl:top-24 xl:self-start">
           <ArticleComposer
@@ -143,10 +171,10 @@ export default function ArticlesPage() {
             onSubmit={submitSearch}
           />
           {isLoadingPosts && (
-            <div className="home-card p-6 text-sm font-semibold text-slate-500">正在加载文章...</div>
+            <div className="home-card p-6 text-sm font-semibold text-slate-700">正在加载文章...</div>
           )}
           {!isLoadingPosts && posts.length === 0 && (
-            <div className="home-card p-6 text-sm leading-7 text-slate-500">
+            <div className="home-card p-6 text-sm leading-7 text-slate-700">
               还没有文章。左侧写一篇 Markdown 博客发布后，它会出现在这里。
             </div>
           )}
@@ -159,7 +187,15 @@ export default function ArticlesPage() {
   );
 }
 
-function SimpleHeader({ active }: { active: string }) {
+function SimpleHeader({
+  active,
+  user,
+  onLogout,
+}: {
+  active: string;
+  user: AuthUser | null;
+  onLogout: () => void;
+}) {
   const items = [
     { label: "主页", href: "/home" },
     { label: "文章", href: "/articles" },
@@ -187,6 +223,10 @@ function SimpleHeader({ active }: { active: string }) {
               {item.label}
             </Link>
           ))}
+          {user && <span className="max-w-32 truncate text-slate-700">{user.nickname || user.email}</span>}
+          <button type="button" onClick={onLogout} className="rounded-xl px-3 py-2 transition hover:bg-emerald-50 hover:text-emerald-600">
+            退出
+          </button>
         </div>
       </nav>
     </header>
@@ -216,7 +256,7 @@ function ArticleComposer({
       </div>
 
       <label className="mt-5 block">
-        <span className="mb-1.5 block text-sm font-semibold text-slate-500">标题</span>
+        <span className="mb-1.5 block text-sm font-semibold text-slate-700">标题</span>
         <input
           value={editor.title}
           onChange={(event) => onChange({ ...editor, title: event.target.value })}
@@ -226,7 +266,7 @@ function ArticleComposer({
       </label>
 
       <label className="mt-3 block">
-        <span className="mb-1.5 block text-sm font-semibold text-slate-500">分类</span>
+        <span className="mb-1.5 block text-sm font-semibold text-slate-700">分类</span>
         <input
           value={editor.category}
           onChange={(event) => onChange({ ...editor, category: event.target.value })}
@@ -236,7 +276,7 @@ function ArticleComposer({
       </label>
 
       <label className="mt-3 block">
-        <span className="mb-1.5 block text-sm font-semibold text-slate-500">检索关键词</span>
+        <span className="mb-1.5 block text-sm font-semibold text-slate-700">检索关键词</span>
         <input
           value={editor.keywords}
           onChange={(event) => onChange({ ...editor, keywords: event.target.value })}
@@ -246,7 +286,7 @@ function ArticleComposer({
       </label>
 
       <label className="mt-3 block">
-        <span className="mb-1.5 block text-sm font-semibold text-slate-500">Markdown 正文</span>
+        <span className="mb-1.5 block text-sm font-semibold text-slate-700">Markdown 正文</span>
         <textarea
           value={editor.content}
           onChange={(event) => onChange({ ...editor, content: event.target.value })}
@@ -256,7 +296,7 @@ function ArticleComposer({
       </label>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-slate-500">{message}</p>
+        <p className="text-sm font-semibold text-slate-700">{message}</p>
         <button
           type="submit"
           disabled={isPublishing}
@@ -285,7 +325,7 @@ function SearchBar({
   return (
     <form onSubmit={onSubmit} className="home-card flex flex-wrap items-end gap-3 p-4">
       <label className="min-w-[220px] flex-1">
-        <span className="mb-1.5 block text-sm font-semibold text-slate-500">文章关键词检索</span>
+        <span className="mb-1.5 block text-sm font-semibold text-slate-700">文章关键词检索</span>
         <input
           value={keyword}
           onChange={(event) => onKeywordChange(event.target.value)}
@@ -296,7 +336,7 @@ function SearchBar({
       <button type="submit" className="home-pill-button h-11">
         {isLoading ? "检索中..." : "检索"}
       </button>
-      <span className="pb-2 text-sm font-semibold text-slate-500">共 {total} 篇</span>
+      <span className="pb-2 text-sm font-semibold text-slate-700">共 {total} 篇</span>
     </form>
   );
 }
@@ -307,14 +347,14 @@ function PostCard({ post }: { post: BlogPost }) {
       <h2 className="border-l-4 border-emerald-400 pl-4 text-2xl font-bold leading-tight">
         {post.title}
       </h2>
-      <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-500">
+      <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-700">
         <span className="rounded-lg bg-emerald-50 px-3 py-1 font-medium text-emerald-600">已发布</span>
         <span>{formatDate(post.created_at)}</span>
         <span>{post.category}</span>
       </div>
-      <p className="mt-4 text-sm leading-7 text-slate-600">{post.summary}</p>
+      <p className="mt-4 text-sm leading-7 text-slate-800">{post.summary}</p>
       {post.keyword_matches.length > 0 && (
-        <p className="mt-3 text-xs font-semibold text-slate-500">
+        <p className="mt-3 text-xs font-semibold text-slate-700">
           命中关键词：{post.keyword_matches.join("、")}
         </p>
       )}
