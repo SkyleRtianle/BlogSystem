@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   authHeaders,
@@ -9,7 +8,6 @@ import {
   redirectToLogin,
   requireAuthToken,
   useAuthUser,
-  type AuthUser,
 } from "@/lib/auth";
 import SiteHeader from "@/components/SiteHeader";
 import { useAppSettings } from "@/lib/useAppSettings";

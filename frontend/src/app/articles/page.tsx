@@ -300,29 +300,31 @@ function SearchBar({
 
 function PostCard({ post }: { post: BlogPost }) {
   return (
-    <article className="home-card p-5">
-      <h2 className="border-l-4 border-emerald-400 pl-4 text-2xl font-bold leading-tight">
-        {post.title}
-      </h2>
-      <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-700">
-        <span className="rounded-lg bg-emerald-50 px-3 py-1 font-medium text-emerald-600">已发布</span>
-        <span>{formatDate(post.created_at)}</span>
-        <span>{post.category}</span>
-      </div>
-      <p className="mt-4 text-sm leading-7 text-slate-800">{post.summary}</p>
-      {post.keyword_matches.length > 0 && (
-        <p className="mt-3 text-xs font-semibold text-slate-700">
-          命中关键词：{post.keyword_matches.join("、")}
-        </p>
-      )}
-      <div className="mt-4 flex flex-wrap gap-2">
-        {post.tags.map((tag) => (
-          <span key={tag} className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
-            #{tag}
-          </span>
-        ))}
-      </div>
-    </article>
+    <Link href={`/articles/${post.id}`} className="block no-underline">
+      <article className="home-card home-clickable-card p-5">
+        <h2 className="border-l-4 border-emerald-400 pl-4 text-2xl font-bold leading-tight">
+          {post.title}
+        </h2>
+        <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-700">
+          <span className="rounded-lg bg-emerald-50 px-3 py-1 font-medium text-emerald-600">已发布</span>
+          <span>{formatDate(post.created_at)}</span>
+          <span>{post.category}</span>
+        </div>
+        <p className="mt-4 text-sm leading-7 text-slate-800">{post.summary}</p>
+        {post.keyword_matches.length > 0 && (
+          <p className="mt-3 text-xs font-semibold text-slate-700">
+            命中关键词：{post.keyword_matches.join("、")}
+          </p>
+        )}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {post.tags.map((tag) => (
+            <span key={tag} className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
+              #{tag}
+            </span>
+          ))}
+        </div>
+      </article>
+    </Link>
   );
 }
 

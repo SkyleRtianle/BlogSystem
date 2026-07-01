@@ -12,6 +12,7 @@ class PostBase(SQLModel):
 
 class Post(PostBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
+    owner_id: int | None = Field(default=None, foreign_key="user.id", index=True)
     summary: str = Field(default="", max_length=280)
     tags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     keyword_matches: list[str] = Field(default_factory=list, sa_column=Column(JSON))

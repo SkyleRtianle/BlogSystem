@@ -155,7 +155,7 @@ export default function HomePage() {
     if (isNight) return `${base} home-night bg-black text-slate-100`;
     if (!showWallpaper) return `${base} bg-white text-slate-900`;
     return `${base} text-slate-900`;
-  }, [isNight]);
+  }, [isNight, showWallpaper]);
 
   return (
     <main
@@ -192,7 +192,7 @@ export default function HomePage() {
       />
 
       <section
-        className="home-content-panel relative z-10 px-[80px] pb-16 mt-[380px] pt-8"
+        className="home-content-panel relative z-10 px-[80px] pb-16 mt-[380px] xl:mt-0 pt-8"
       >
         <div className="home-dashboard-grid mx-auto grid max-w-[1700px] gap-5 xl:grid-cols-[1fr_3fr_1fr]">
           <aside className="home-static-column space-y-5 xl:self-start">
@@ -200,7 +200,7 @@ export default function HomePage() {
             <NoticeCard />
           </aside>
 
-          <section data-home-scroll-column className="home-scroll-column space-y-5">
+          <section data-home-scroll-column className="home-scroll-column">
             <LatestPosts posts={posts} isLoading={isLoadingPosts} error={postsError} categories={categories} />
           </section>
 
@@ -211,7 +211,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <footer className="relative z-10 mt-8 pb-6 text-center text-sm text-slate-500">
+      <footer className="relative z-10 mt-8 pb-6 text-center text-sm text-slate-500 xl:hidden">
         {siteInfo.map(([label, value], i) => (
           <span key={label}>
             {label}：{value}
@@ -296,9 +296,13 @@ function LatestPosts({
           还没有文章。进入文章页面后，可以发布第一篇 Markdown 博客。
         </div>
       )}
-      {posts.slice(0, 4).map((post, index) => (
-        <PostCard key={post.id} post={post} index={index} />
-      ))}
+      {posts.length > 0 && (
+        <div className="home-masonry-feed">
+          {posts.map((post, index) => (
+            <PostCard key={post.id} post={post} index={index} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -335,36 +339,42 @@ function NoticeCard() {
 }
 
 function PostCard({ post, index }: { post: BlogPost; index: number }) {
+  const imageHeights = [150, 210, 176, 238, 188, 260];
+  const imageHeight = imageHeights[index % imageHeights.length];
+
   return (
-    <article className="home-card grid gap-5 p-5 lg:grid-cols-[1fr_280px]">
-      <div>
-        <h2 className="border-l-4 border-emerald-400 pl-4 text-2xl font-bold leading-tight">
-          {post.title}
-        </h2>
-        <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-700">
-          <span className="rounded-lg bg-emerald-50 px-3 py-1 font-medium text-emerald-600">
-            最新
-          </span>
-          <span>{formatDate(post.created_at)}</span>
-          <span>{post.category}</span>
-        </div>
-        <p className="mt-4 text-sm leading-7 text-slate-800">{post.summary}</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {post.tags.map((tag) => (
-            <span key={tag} className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
-              #{tag}
+    <Link href={`/articles/${post.id}`} className="home-masonry-card block no-underline">
+      <article className="home-card home-clickable-card overflow-hidden">
+        <div
+          className="bg-cover bg-center shadow-inner"
+          style={{
+            height: imageHeight,
+            backgroundImage: `linear-gradient(135deg, rgba(16,185,129,.12), rgba(14,165,233,.12)), url('/images/home-background.png')`,
+            backgroundPosition: index % 2 === 0 ? "center" : "70% center",
+          }}
+        />
+        <div className="p-5">
+          <h2 className="border-l-4 border-emerald-400 pl-4 text-2xl font-bold leading-tight">
+            {post.title}
+          </h2>
+          <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-700">
+            <span className="rounded-lg bg-emerald-50 px-3 py-1 font-medium text-emerald-600">
+              最新
             </span>
-          ))}
+            <span>{formatDate(post.created_at)}</span>
+            <span>{post.category}</span>
+          </div>
+          <p className="mt-4 text-sm leading-7 text-slate-800">{post.summary}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {post.tags.map((tag) => (
+              <span key={tag} className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
+                #{tag}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
-      <div
-        className="min-h-40 rounded-2xl bg-cover bg-center shadow-inner"
-        style={{
-          backgroundImage: `linear-gradient(135deg, rgba(16,185,129,.12), rgba(14,165,233,.12)), url('/images/home-background.png')`,
-          backgroundPosition: index % 2 === 0 ? "center" : "70% center",
-        }}
-      />
-    </article>
+      </article>
+    </Link>
   );
 }
 

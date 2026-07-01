@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { ChangeEvent, MouseEvent, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   authHeaders,
   clearAuthSession,
@@ -9,7 +8,6 @@ import {
   redirectToLogin,
   requireAuthToken,
   useAuthUser,
-  type AuthUser,
 } from "@/lib/auth";
 import SiteHeader from "@/components/SiteHeader";
 import { useAppSettings } from "@/lib/useAppSettings";
@@ -24,13 +22,83 @@ type Photo = {
   created_at: string;
 };
 
+type PhotoAlbum = {
+  id: string;
+  title: string;
+  photos: Photo[];
+  created_at: string;
+};
+
+type ContextMenuState = {
+  albumId: string;
+  x: number;
+  y: number;
+};
+
+const ALBUM_PREFIX = "__album:";
+
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error("图片读取失败"));
+    };
+    reader.onerror = () => reject(new Error("图片读取失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function getFileTitle(file: File) {
+  return file.name.replace(/\.[^.]+$/, "").trim() || "本地照片";
+}
+
+function getAlbumId(photo: Photo) {
+  if (photo.description.startsWith(ALBUM_PREFIX)) {
+    return photo.description.slice(ALBUM_PREFIX.length).replace(/__$/, "") || `photo-${photo.id}`;
+  }
+  return `photo-${photo.id}`;
+}
+
+function buildAlbums(photos: Photo[]) {
+  const albumMap = new Map<string, PhotoAlbum>();
+  for (const photo of photos) {
+    const albumId = getAlbumId(photo);
+    const existing = albumMap.get(albumId);
+    if (existing) {
+      existing.photos.push(photo);
+      if (new Date(photo.created_at) > new Date(existing.created_at)) existing.created_at = photo.created_at;
+    } else {
+      albumMap.set(albumId, {
+        id: albumId,
+        title: photo.title || "未命名相册",
+        photos: [photo],
+        created_at: photo.created_at,
+      });
+    }
+  }
+  return Array.from(albumMap.values()).sort((left, right) => {
+    return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+  });
+}
+
 export default function PhotosPage() {
   const { isNight, showWallpaper, glassAlpha, setGlassAlpha, toggleNight, toggleWallpaper } = useAppSettings();
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [form, setForm] = useState({ title: "", image_url: "", description: "" });
-  const [message, setMessage] = useState("添加照片链接后，会展示在照片墙。");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeAlbumId, setActiveAlbumId] = useState<string | null>(null);
+  const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingAlbumTitleRef = useRef("");
+  const lightboxTouchStartXRef = useRef<number | null>(null);
   const currentUser = useAuthUser();
+  const albums = useMemo(() => buildAlbums(photos), [photos]);
+  const activeAlbum = albums.find((album) => album.id === activeAlbumId) ?? null;
+  const activePhoto = activeAlbum && activePhotoIndex !== null ? activeAlbum.photos[activePhotoIndex] : null;
 
   const fetchPhotos = useCallback(async () => {
     const token = requireAuthToken();
@@ -48,7 +116,7 @@ export default function PhotosPage() {
       setPhotos(data.photos);
     } catch (error) {
       setPhotos([]);
-      setMessage(error instanceof Error ? error.message : "照片列表加载失败");
+      console.error(error);
     }
   }, []);
 
@@ -59,39 +127,129 @@ export default function PhotosPage() {
     return () => window.clearTimeout(timer);
   }, [fetchPhotos]);
 
-  const submitPhoto = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      if (!form.title.trim() || !form.image_url.trim()) {
-        setMessage("照片标题和图片地址都需要填写");
+  useEffect(() => {
+    if (!contextMenu) return;
+    const closeMenu = () => setContextMenu(null);
+    window.addEventListener("click", closeMenu);
+    return () => window.removeEventListener("click", closeMenu);
+  }, [contextMenu]);
+
+  const showPreviousPhoto = useCallback(() => {
+    if (!activeAlbum || activePhotoIndex === null) return;
+    setActivePhotoIndex((activePhotoIndex - 1 + activeAlbum.photos.length) % activeAlbum.photos.length);
+  }, [activeAlbum, activePhotoIndex]);
+
+  const showNextPhoto = useCallback(() => {
+    if (!activeAlbum || activePhotoIndex === null) return;
+    setActivePhotoIndex((activePhotoIndex + 1) % activeAlbum.photos.length);
+  }, [activeAlbum, activePhotoIndex]);
+
+  const startPhotoSwipe = useCallback((event: TouchEvent<HTMLDivElement>) => {
+    lightboxTouchStartXRef.current = event.touches[0]?.clientX ?? null;
+  }, []);
+
+  const endPhotoSwipe = useCallback((event: TouchEvent<HTMLDivElement>) => {
+    const startX = lightboxTouchStartXRef.current;
+    lightboxTouchStartXRef.current = null;
+    if (startX === null) return;
+    const endX = event.changedTouches[0]?.clientX ?? startX;
+    const deltaX = endX - startX;
+    if (Math.abs(deltaX) < 48) return;
+    if (deltaX > 0) showPreviousPhoto();
+    else showNextPhoto();
+  }, [showNextPhoto, showPreviousPhoto]);
+
+  useEffect(() => {
+    if (!activePhoto) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") showPreviousPhoto();
+      if (event.key === "ArrowRight") showNextPhoto();
+      if (event.key === "Escape") setActivePhotoIndex(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activePhoto, showNextPhoto, showPreviousPhoto]);
+
+  const uploadPhotos = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) {
         return;
       }
 
       setIsSubmitting(true);
-      setMessage("正在添加照片...");
       try {
         const token = requireAuthToken();
         if (!token) return;
 
-        const response = await fetch(`${API_BASE_URL}/photos`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders(token) },
-          body: JSON.stringify(form),
-        });
-        ensureAuthorized(response);
-        if (!response.ok) throw new Error("照片添加失败");
-        const created: Photo = await response.json();
-        setPhotos((current) => [created, ...current]);
-        setForm({ title: "", image_url: "", description: "" });
-        setMessage("照片已加入照片墙");
+        const createdPhotos: Photo[] = [];
+        const albumId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const title = pendingAlbumTitleRef.current.trim() || getFileTitle(files[0]);
+
+        for (const file of files) {
+          const imageUrl = await fileToDataUrl(file);
+
+          const response = await fetch(`${API_BASE_URL}/photos`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authHeaders(token) },
+            body: JSON.stringify({ title, image_url: imageUrl, description: `${ALBUM_PREFIX}${albumId}__` }),
+          });
+          ensureAuthorized(response);
+          if (!response.ok) throw new Error("照片添加失败");
+          createdPhotos.push(await response.json());
+        }
+
+        setPhotos((current) => [...createdPhotos.reverse(), ...current]);
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : "照片添加失败");
+        console.error(error);
       } finally {
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        pendingAlbumTitleRef.current = "";
         setIsSubmitting(false);
       }
     },
-    [form],
+    [],
   );
+
+  const selectPhotos = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith("image/"));
+    void uploadPhotos(files);
+  }, [uploadPhotos]);
+
+  const openAlbumPicker = useCallback(() => {
+    pendingAlbumTitleRef.current = `相册 ${albums.length + 1}`;
+    fileInputRef.current?.click();
+  }, [albums.length]);
+
+  const openContextMenu = useCallback((event: MouseEvent, albumId: string) => {
+    event.preventDefault();
+    setContextMenu({ albumId, x: event.clientX, y: event.clientY });
+  }, []);
+
+  const deleteAlbum = useCallback(async (albumId: string) => {
+    const album = albums.find((item) => item.id === albumId);
+    if (!album) return;
+
+    setContextMenu(null);
+    setIsSubmitting(true);
+    try {
+      const token = requireAuthToken();
+      if (!token) return;
+      for (const photo of album.photos) {
+        const response = await fetch(`${API_BASE_URL}/photos/${photo.id}`, {
+          method: "DELETE",
+          headers: authHeaders(token),
+        });
+        ensureAuthorized(response);
+        if (!response.ok) throw new Error("相册删除失败");
+      }
+      setPhotos((current) => current.filter((photo) => !album.photos.some((item) => item.id === photo.id)));
+      if (activeAlbumId === albumId) setActiveAlbumId(null);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [activeAlbumId, albums]);
 
   const logout = useCallback(() => {
     clearAuthSession();
@@ -102,78 +260,194 @@ export default function PhotosPage() {
     <main className={`home-shell min-h-screen ${isNight ? "home-night bg-black text-slate-100" : !showWallpaper ? "bg-white text-slate-900" : "text-slate-900"}`} style={{ "--glass-alpha": glassAlpha } as React.CSSProperties}>
       {showWallpaper && !isNight && <div className="home-global-wallpaper" style={{ filter: "blur(12px) saturate(0.82)" }} />}
       <SiteHeader active="照片墙" isNight={isNight} showWallpaper={showWallpaper} glassAlpha={glassAlpha} onGlassAlphaChange={setGlassAlpha} onToggleNight={toggleNight} onToggleWallpaper={toggleWallpaper} user={currentUser} onLogout={logout} />
-      <section className="mx-auto grid max-w-[1500px] gap-5 px-[80px] py-6 xl:grid-cols-[420px_1fr]">
-        <form onSubmit={submitPhoto} className="home-card p-5 xl:sticky xl:top-24 xl:self-start">
-          <h1 className="home-section-title">添加照片</h1>
-          <label className="mt-5 block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-700">照片标题</span>
-            <input
-              className="home-field"
-              value={form.title}
-              onChange={(event) => setForm({ ...form, title: event.target.value })}
-              placeholder="例如：夏天的海边"
-            />
-          </label>
-          <label className="mt-3 block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-700">图片地址</span>
-            <input
-              className="home-field"
-              value={form.image_url}
-              onChange={(event) => setForm({ ...form, image_url: event.target.value })}
-              placeholder="https://example.com/photo.jpg"
-            />
-          </label>
-          <label className="mt-3 block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-700">描述</span>
-            <textarea
-              className="home-field min-h-28 resize-y py-3"
-              value={form.description}
-              onChange={(event) => setForm({ ...form, description: event.target.value })}
-              placeholder="记录照片背后的故事"
-            />
-          </label>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-slate-700">{message}</p>
-            <button className="home-pill-button" disabled={isSubmitting} type="submit">
-              {isSubmitting ? "添加中..." : "加入照片墙"}
-            </button>
-          </div>
-        </form>
-
-        <section className="space-y-4">
-          <div className="home-card flex items-center justify-between p-4">
-            <h2 className="home-section-title">照片墙</h2>
-            <span className="text-sm font-semibold text-slate-700">共 {photos.length} 张</span>
-          </div>
-          {photos.length === 0 && (
-            <div className="home-card p-6 text-sm leading-7 text-slate-700">
-              暂无照片。添加图片地址后，会以照片卡片形式展示在这里。
+      <section className="photo-wall-layout mx-auto max-w-[1500px] px-4 py-8 sm:px-8 xl:px-[80px]">
+        <div className="photo-wall-hero">
+          <div className="photo-wall-heading">
+            <div className="photo-wall-title">
+              <span className="photo-title-icon" aria-hidden="true" />
+              <input
+                ref={fileInputRef}
+                className="sr-only"
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={selectPhotos}
+              />
+              <button
+                className="photo-upload-button"
+                disabled={isSubmitting}
+                type="button"
+                onClick={openAlbumPicker}
+              >
+                {isSubmitting ? "处理中" : "添加相册"}
+              </button>
             </div>
-          )}
-          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-            {photos.map((photo) => (
-              <article key={photo.id} className="home-card overflow-hidden">
-                <div
-                  className="aspect-[4/3] bg-cover bg-center"
-                  style={{ backgroundImage: `url("${photo.image_url}")` }}
-                />
-                <div className="p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h3 className="text-xl font-bold">{photo.title}</h3>
-                    <span className="text-xs font-semibold text-slate-700">{formatDate(photo.created_at)}</span>
-                  </div>
-                  <p className="mt-3 text-sm leading-7 text-slate-800">
-                    {photo.description || "这张照片暂时没有描述。"}
-                  </p>
-                </div>
-              </article>
-            ))}
           </div>
-        </section>
+        </div>
+
+        {albums.length === 0 && (
+          <div className="photo-empty-state">
+            暂无相册。点击添加相册后，会以堆叠卡片形式展示在这里。
+          </div>
+        )}
+
+        <div className="photo-album-grid">
+          {albums.map((album, index) => {
+            const cover = album.photos[0];
+            const second = album.photos[1] ?? cover;
+            const third = album.photos[2] ?? second;
+            const fourth = album.photos[3] ?? third;
+            return (
+            <article
+              key={album.id}
+              className="photo-album-card"
+              onClick={() => {
+                setActivePhotoIndex(null);
+                setActiveAlbumId(album.id);
+              }}
+              onContextMenu={(event) => openContextMenu(event, album.id)}
+            >
+              <div className="photo-stack-stage" title="右键删除相册">
+                <span
+                  aria-hidden="true"
+                  className="photo-stack-copy photo-stack-copy-one"
+                  style={{ backgroundImage: `url("${second.image_url}")` }}
+                />
+                <span
+                  aria-hidden="true"
+                  className="photo-stack-copy photo-stack-copy-two"
+                  style={{ backgroundImage: `url("${third.image_url}")` }}
+                />
+                <span
+                  aria-hidden="true"
+                  className="photo-stack-copy photo-stack-copy-three"
+                  style={{ backgroundImage: `url("${fourth.image_url}")` }}
+                />
+                <div
+                  className="photo-stack-image"
+                  style={{ backgroundImage: `url("${cover.image_url}")` }}
+                />
+                <span className="photo-count-badge">{album.photos.length} 张</span>
+              </div>
+              <div className="photo-card-meta">
+                <h2>{album.title || `${index + 1}`}</h2>
+                <time>{formatDate(album.created_at)}</time>
+              </div>
+            </article>
+            );
+          })}
+        </div>
       </section>
+
+      {activeAlbum && (
+        <div
+          className="photo-album-modal"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => {
+            setActivePhotoIndex(null);
+            setActiveAlbumId(null);
+          }}
+        >
+          <div className="photo-album-modal-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="photo-album-modal-head">
+              <div>
+                <h2>{activeAlbum.title}</h2>
+                <p>{activeAlbum.photos.length} 张照片</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActivePhotoIndex(null);
+                  setActiveAlbumId(null);
+                }}
+              >
+                关闭
+              </button>
+            </div>
+            <div className="photo-album-modal-grid">
+              {activeAlbum.photos.map((photo, index) => (
+                <figure
+                  key={photo.id}
+                  className="photo-polaroid-card"
+                  style={{
+                    "--photo-rotate": `${((index % 5) - 2) * 2.2}deg`,
+                    animationDelay: `${index * 90}ms`,
+                  } as React.CSSProperties}
+                  onClick={() => setActivePhotoIndex(index)}
+                >
+                  <div
+                    aria-label={photo.title}
+                    role="img"
+                    style={{ backgroundImage: `url("${photo.image_url}")` }}
+                  />
+                  <figcaption>{index + 1}</figcaption>
+                </figure>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activePhoto && activeAlbum && activePhotoIndex !== null && (
+        <div
+          className="photo-lightbox"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setActivePhotoIndex(null)}
+          onTouchEnd={endPhotoSwipe}
+          onTouchStart={startPhotoSwipe}
+        >
+          <button
+            aria-label="上一张"
+            className="photo-lightbox-nav photo-lightbox-prev"
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              showPreviousPhoto();
+            }}
+          >
+            ‹
+          </button>
+          <div className="photo-lightbox-frame" onClick={(event) => event.stopPropagation()}>
+            <div
+              aria-label={activePhoto.title}
+              role="img"
+              style={{ backgroundImage: `url("${activePhoto.image_url}")` }}
+            />
+            <p>{activePhotoIndex + 1} / {activeAlbum.photos.length}</p>
+          </div>
+          <button
+            aria-label="下一张"
+            className="photo-lightbox-nav photo-lightbox-next"
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              showNextPhoto();
+            }}
+          >
+            ›
+          </button>
+        </div>
+      )}
+
+      {contextMenu && (
+        <div
+          className="photo-context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button type="button" onClick={() => void deleteAlbum(contextMenu.albumId)}>
+            删除相册
+          </button>
+        </div>
+      )}
     </main>
   );
 }
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium" }).format(new Date(value));
+  return new Intl.DateTimeFormat("zh-CN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
