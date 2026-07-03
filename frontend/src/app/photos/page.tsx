@@ -10,6 +10,7 @@ import {
   useAuthUser,
 } from "@/lib/auth";
 import SiteHeader from "@/components/SiteHeader";
+import ImageCropper from "@/components/ImageCropper";
 import { useAppSettings } from "@/lib/useAppSettings";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
@@ -37,19 +38,15 @@ type ContextMenuState = {
 
 const ALBUM_PREFIX = "__album:";
 
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        resolve(reader.result);
-        return;
-      }
-      reject(new Error("图片读取失败"));
-    };
-    reader.onerror = () => reject(new Error("图片读取失败"));
-    reader.readAsDataURL(file);
-  });
+async function dataUrlToFile(dataUrl: string, fileName: string): Promise<File> {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  return new File([blob], fileName, { type: blob.type || "image/jpeg" });
+}
+
+function resolveImageUrl(imageUrl: string) {
+  if (imageUrl.startsWith("data:")) return imageUrl;
+  return `${API_BASE_URL}/photos/file/${imageUrl}`;
 }
 
 function getFileTitle(file: File) {
@@ -95,6 +92,9 @@ export default function PhotosPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingAlbumTitleRef = useRef("");
   const lightboxTouchStartXRef = useRef<number | null>(null);
+  const cropperQueueRef = useRef<File[]>([]);
+  const cropperResultsRef = useRef<File[]>([]);
+  const [activeCropperFile, setActiveCropperFile] = useState<File | null>(null);
   const currentUser = useAuthUser();
   const albums = useMemo(() => buildAlbums(photos), [photos]);
   const activeAlbum = albums.find((album) => album.id === activeAlbumId) ?? null;
@@ -172,9 +172,7 @@ export default function PhotosPage() {
 
   const uploadPhotos = useCallback(
     async (files: File[]) => {
-      if (files.length === 0) {
-        return;
-      }
+      if (files.length === 0) return;
 
       setIsSubmitting(true);
       try {
@@ -186,12 +184,15 @@ export default function PhotosPage() {
         const title = pendingAlbumTitleRef.current.trim() || getFileTitle(files[0]);
 
         for (const file of files) {
-          const imageUrl = await fileToDataUrl(file);
+          const formData = new FormData();
+          formData.append("title", title);
+          formData.append("description", `${ALBUM_PREFIX}${albumId}__`);
+          formData.append("file", file);
 
           const response = await fetch(`${API_BASE_URL}/photos`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", ...authHeaders(token) },
-            body: JSON.stringify({ title, image_url: imageUrl, description: `${ALBUM_PREFIX}${albumId}__` }),
+            headers: authHeaders(token),
+            body: formData,
           });
           ensureAuthorized(response);
           if (!response.ok) throw new Error("照片添加失败");
@@ -212,8 +213,47 @@ export default function PhotosPage() {
 
   const selectPhotos = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith("image/"));
-    void uploadPhotos(files);
+    if (files.length === 0) return;
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    cropperQueueRef.current = [...files];
+    cropperResultsRef.current = [];
+    setActiveCropperFile(files[0]);
+  }, []);
+
+  const handlePhotoCrop = useCallback(async (dataUrl: string) => {
+    const current = cropperQueueRef.current[0];
+    if (!current) return;
+    try {
+      const cropped = await dataUrlToFile(dataUrl, current.name);
+      cropperResultsRef.current.push(cropped);
+    } catch {
+      cropperResultsRef.current.push(current);
+    }
+    cropperQueueRef.current = cropperQueueRef.current.slice(1);
+    const nextFile = cropperQueueRef.current[0] || null;
+    setActiveCropperFile(nextFile);
+    if (!nextFile && cropperResultsRef.current.length > 0) {
+      void uploadPhotos(cropperResultsRef.current);
+    }
   }, [uploadPhotos]);
+
+  const handlePhotoSkip = useCallback(() => {
+    const current = cropperQueueRef.current[0];
+    if (!current) return;
+    cropperResultsRef.current.push(current);
+    cropperQueueRef.current = cropperQueueRef.current.slice(1);
+    const nextFile = cropperQueueRef.current[0] || null;
+    setActiveCropperFile(nextFile);
+    if (!nextFile && cropperResultsRef.current.length > 0) {
+      void uploadPhotos(cropperResultsRef.current);
+    }
+  }, [uploadPhotos]);
+
+  const handlePhotoCropperClose = useCallback(() => {
+    cropperQueueRef.current = [];
+    cropperResultsRef.current = [];
+    setActiveCropperFile(null);
+  }, []);
 
   const openAlbumPicker = useCallback(() => {
     pendingAlbumTitleRef.current = `相册 ${albums.length + 1}`;
@@ -264,7 +304,6 @@ export default function PhotosPage() {
         <div className="photo-wall-hero">
           <div className="photo-wall-heading">
             <div className="photo-wall-title">
-              <span className="photo-title-icon" aria-hidden="true" />
               <input
                 ref={fileInputRef}
                 className="sr-only"
@@ -279,7 +318,7 @@ export default function PhotosPage() {
                 type="button"
                 onClick={openAlbumPicker}
               >
-                {isSubmitting ? "处理中" : "添加相册"}
+                {isSubmitting ? "处理中" : "上传相册"}
               </button>
             </div>
           </div>
@@ -311,21 +350,21 @@ export default function PhotosPage() {
                 <span
                   aria-hidden="true"
                   className="photo-stack-copy photo-stack-copy-one"
-                  style={{ backgroundImage: `url("${second.image_url}")` }}
+                  style={{ backgroundImage: `url("${resolveImageUrl(second.image_url)}")` }}
                 />
                 <span
                   aria-hidden="true"
                   className="photo-stack-copy photo-stack-copy-two"
-                  style={{ backgroundImage: `url("${third.image_url}")` }}
+                  style={{ backgroundImage: `url("${resolveImageUrl(third.image_url)}")` }}
                 />
                 <span
                   aria-hidden="true"
                   className="photo-stack-copy photo-stack-copy-three"
-                  style={{ backgroundImage: `url("${fourth.image_url}")` }}
+                  style={{ backgroundImage: `url("${resolveImageUrl(fourth.image_url)}")` }}
                 />
                 <div
                   className="photo-stack-image"
-                  style={{ backgroundImage: `url("${cover.image_url}")` }}
+                  style={{ backgroundImage: `url("${resolveImageUrl(cover.image_url)}")` }}
                 />
                 <span className="photo-count-badge">{album.photos.length} 张</span>
               </div>
@@ -379,7 +418,7 @@ export default function PhotosPage() {
                   <div
                     aria-label={photo.title}
                     role="img"
-                    style={{ backgroundImage: `url("${photo.image_url}")` }}
+                    style={{ backgroundImage: `url("${resolveImageUrl(photo.image_url)}")` }}
                   />
                   <figcaption>{index + 1}</figcaption>
                 </figure>
@@ -413,7 +452,7 @@ export default function PhotosPage() {
             <div
               aria-label={activePhoto.title}
               role="img"
-              style={{ backgroundImage: `url("${activePhoto.image_url}")` }}
+              style={{ backgroundImage: `url("${resolveImageUrl(activePhoto.image_url)}")` }}
             />
             <p>{activePhotoIndex + 1} / {activeAlbum.photos.length}</p>
           </div>
@@ -441,6 +480,14 @@ export default function PhotosPage() {
             删除相册
           </button>
         </div>
+      )}
+      {activeCropperFile && (
+        <ImageCropper
+          file={activeCropperFile}
+          onCrop={handlePhotoCrop}
+          onSkip={handlePhotoSkip}
+          onClose={handlePhotoCropperClose}
+        />
       )}
     </main>
   );

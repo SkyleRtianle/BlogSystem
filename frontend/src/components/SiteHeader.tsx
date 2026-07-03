@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import type { AuthUser } from "@/lib/auth";
 
 const navItems = [
@@ -9,8 +10,9 @@ const navItems = [
   { label: "照片墙", href: "/photos" },
   { label: "友链", href: "/links" },
   { label: "留言", href: "/messages" },
-  { label: "我的", href: "/home" },
 ];
+
+let lastNavIndex: number | null = null;
 
 type Props = {
   active?: string;
@@ -29,12 +31,22 @@ export default function SiteHeader({
   isNight,
   showWallpaper,
   glassAlpha,
-  user,
   onGlassAlphaChange,
   onToggleNight,
   onToggleWallpaper,
   onLogout,
 }: Props) {
+  const activeIndex = Math.max(0, navItems.findIndex((item) => item.label === (active ?? "主页")));
+  const [sliderIndex, setSliderIndex] = useState(() => lastNavIndex ?? activeIndex);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setSliderIndex(activeIndex);
+      lastNavIndex = activeIndex;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeIndex]);
+
   return (
     <header className="sticky top-0 z-40 mx-auto max-w-[1720px] px-4 pt-3 sm:px-6">
       <nav className="home-nav flex min-h-16 items-center justify-between gap-4 px-4 sm:px-6">
@@ -45,12 +57,16 @@ export default function SiteHeader({
           <span className="truncate text-lg font-bold">Skyler Blog</span>
         </Link>
 
-        <div className="hidden items-center gap-6 text-sm font-semibold lg:flex">
+        <div
+          className="nav-slider-group hidden text-sm font-semibold lg:flex"
+          style={{ "--nav-active-index": sliderIndex } as React.CSSProperties}
+        >
+          <span className="nav-slider-thumb" aria-hidden="true" />
           {navItems.map((item) => (
             <Link
               key={item.label}
               href={item.href}
-              className={`transition hover:text-emerald-500 ${
+              className={`nav-slider-link ${
                 active === item.label ? "text-emerald-500" : ""
               }`}
             >
@@ -60,43 +76,43 @@ export default function SiteHeader({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {user && (
-            <span className="hidden max-w-32 truncate text-sm font-semibold text-slate-800 sm:inline">
-              {user.nickname || user.email}
-            </span>
-          )}
-          <Link
-            href="/articles"
-            className="hidden h-11 items-center rounded-xl bg-slate-100/70 px-4 text-sm font-semibold text-slate-700 transition hover:text-emerald-500 xl:flex"
+          <div
+            className={`theme-mode-switch hidden md:grid ${isNight ? "theme-mode-switch-night" : ""}`}
+            role="group"
+            aria-label="白天夜间模式"
           >
-            搜索文章
-          </Link>
-          <div className="hidden rounded-xl bg-white/30 p-1 shadow-inner md:flex">
+            <span className="theme-mode-thumb" aria-hidden="true" />
             <button
               type="button"
-              onClick={onToggleWallpaper}
-              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                !showWallpaper
-                  ? "bg-emerald-500 text-white shadow-sm"
-                  : "text-slate-800 hover:bg-white/55"
-              }`}
+              onClick={() => {
+                if (isNight) {
+                  onToggleNight();
+                  return;
+                }
+                onToggleWallpaper();
+              }}
+              aria-label={isNight ? "切换白天模式" : showWallpaper ? "切换白色背景" : "切换壁纸背景"}
+              aria-pressed={!isNight}
+              title={isNight ? "白天" : showWallpaper ? "白色背景" : "壁纸背景"}
+              className="theme-mode-option"
             >
-              纯色
+              ☀
             </button>
             <button
               type="button"
-              onClick={onToggleNight}
-              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                isNight
-                  ? "bg-emerald-500 text-white shadow-sm"
-                  : "text-slate-800 hover:bg-white/55"
-              }`}
+              onClick={() => {
+                if (!isNight) onToggleNight();
+              }}
+              aria-label="切换夜间模式"
+              aria-pressed={isNight}
+              title="夜间"
+              className="theme-mode-option"
             >
-              夜间
+              ☾
             </button>
           </div>
-          <div className="hidden items-center gap-2 md:flex">
-            <span className="text-xs font-semibold text-slate-600">玻璃度</span>
+          <div className="glass-control hidden items-center gap-2 md:flex">
+            <span className="glass-control-label">玻璃度</span>
             <input
               type="range"
               min="0.1"
@@ -104,8 +120,10 @@ export default function SiteHeader({
               step="0.01"
               value={glassAlpha}
               onChange={(e) => onGlassAlphaChange(parseFloat(e.target.value))}
+              style={{ "--glass-progress": `${((glassAlpha - 0.1) / 0.85) * 100}%` } as React.CSSProperties}
               className="glass-slider"
             />
+            <span className="glass-control-value">{Math.round(glassAlpha * 100)}%</span>
           </div>
           <button
             type="button"

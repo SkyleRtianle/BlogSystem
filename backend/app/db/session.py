@@ -29,6 +29,8 @@ def _ensure_sqlite_owner_columns() -> None:
             columns = {column["name"] for column in inspector.get_columns(table_name)}
             if "owner_id" not in columns:
                 connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN owner_id INTEGER"))
+            if table_name == Post.__tablename__ and "cover_url" not in columns:
+                connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN cover_url VARCHAR DEFAULT ''"))
 
 
 def init_db() -> None:

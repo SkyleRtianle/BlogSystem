@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 
 const DEFAULT_GLASS_ALPHA = 0.6;
+let cachedIsNight = false;
+let cachedShowWallpaper = true;
+let cachedGlassAlpha = DEFAULT_GLASS_ALPHA;
 
 function load(key: string) {
   if (typeof window === "undefined") return null;
@@ -17,24 +20,62 @@ function loadGlassAlpha() {
 }
 
 export function useAppSettings() {
-  const [isNight, setIsNight] = useState(() => load("isNight") === "true");
-  const [showWallpaper, setShowWallpaper] = useState(() => load("showWallpaper") !== "false");
-  const [glassAlpha, setGlassAlpha] = useState(loadGlassAlpha);
+  const [isNight, setIsNight] = useState(cachedIsNight);
+  const [showWallpaper, setShowWallpaper] = useState(cachedShowWallpaper);
+  const [glassAlpha, setGlassAlphaState] = useState(cachedGlassAlpha);
+  const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => { localStorage.setItem("home_isNight", String(isNight)); }, [isNight]);
-  useEffect(() => { localStorage.setItem("home_showWallpaper", String(showWallpaper)); }, [showWallpaper]);
-  useEffect(() => { localStorage.setItem("home_glassAlpha", String(glassAlpha)); }, [glassAlpha]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      cachedIsNight = load("isNight") === "true";
+      cachedShowWallpaper = load("showWallpaper") !== "false";
+      cachedGlassAlpha = loadGlassAlpha();
+      setIsNight(cachedIsNight);
+      setShowWallpaper(cachedShowWallpaper);
+      setGlassAlphaState(cachedGlassAlpha);
+      setHydrated(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    cachedIsNight = isNight;
+    if (hydrated) localStorage.setItem("home_isNight", String(isNight));
+  }, [isNight, hydrated]);
+  useEffect(() => {
+    cachedShowWallpaper = showWallpaper;
+    if (hydrated) localStorage.setItem("home_showWallpaper", String(showWallpaper));
+  }, [showWallpaper, hydrated]);
+  useEffect(() => {
+    cachedGlassAlpha = glassAlpha;
+    if (hydrated) localStorage.setItem("home_glassAlpha", String(glassAlpha));
+  }, [glassAlpha, hydrated]);
+
+  const setGlassAlpha = useCallback((value: number) => {
+    cachedGlassAlpha = value;
+    setGlassAlphaState(value);
+  }, []);
 
   const toggleNight = useCallback(() => {
     setIsNight((v) => {
-      if (!v) setShowWallpaper(true);
-      return !v;
+      const next = !v;
+      cachedIsNight = next;
+      if (!v) {
+        cachedShowWallpaper = true;
+        setShowWallpaper(true);
+      }
+      return next;
     });
   }, []);
   const toggleWallpaper = useCallback(() => {
     setShowWallpaper((v) => {
-      if (v) setIsNight(false);
-      return !v;
+      const next = !v;
+      cachedShowWallpaper = next;
+      if (v) {
+        cachedIsNight = false;
+        setIsNight(false);
+      }
+      return next;
     });
   }, []);
 

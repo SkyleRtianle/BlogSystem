@@ -20,6 +20,7 @@ type BlogPost = {
   title: string;
   content: string;
   category: string;
+  cover_url: string;
   summary: string;
   tags: string[];
   keyword_matches: string[];
@@ -81,8 +82,22 @@ export default function ArticleDetailPage() {
         )}
 
         {post && (
-          <article className="home-card overflow-hidden" onClick={(event) => event.stopPropagation()}>
-            <div className="article-detail-cover" />
+          <article className="home-card overflow-hidden relative" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              className="article-detail-back"
+              onClick={(event) => {
+                event.stopPropagation();
+                router.back();
+              }}
+              aria-label="返回"
+            >
+              ← 返回
+            </button>
+            <div
+              className="article-detail-cover"
+              style={post.cover_url ? { backgroundImage: `linear-gradient(135deg, rgb(16 185 129 / 0.18), rgb(14 165 233 / 0.2)), url("${post.cover_url}")` } : undefined}
+            />
             <div className="p-6 sm:p-8">
               <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-slate-700">
                 <span className="rounded-lg bg-emerald-50 px-3 py-1 text-emerald-600">{post.category}</span>

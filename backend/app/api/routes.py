@@ -1,8 +1,12 @@
 import hashlib
 import hmac
+import os
 import secrets
+import uuid
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlmodel import Session, col, func, or_, select
 
 from app.core.config import settings
@@ -17,16 +21,16 @@ from app.models.community import (
     MessageList,
     MessageRead,
     Photo,
-    PhotoCreate,
     PhotoList,
     PhotoRead,
 )
-from app.models.post import Post, PostCreate, PostList, PostRead
+from app.models.post import Post, PostCreate, PostList, PostRead, PostUpdate
 from app.models.user import AuthResponse, User, UserCreate, UserLogin, UserRead
 from app.services.post_processing import build_summary, find_keyword_matches, generate_tags
 
 router = APIRouter()
 PASSWORD_ITERATIONS = 210_000
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "uploads", "photos")
 
 
 def _normalize_email(value: str) -> str:
@@ -144,10 +148,39 @@ async def create_post(
         title=payload.title.strip(),
         content=payload.content.strip(),
         category=payload.category.strip() or "未分类",
+        cover_url=payload.cover_url.strip(),
         summary=build_summary(payload.content),
         tags=generate_tags(payload.title, payload.content, keyword_matches),
         keyword_matches=keyword_matches,
     )
+
+    session.add(post)
+    session.commit()
+    session.refresh(post)
+    return post
+
+
+@router.put("/posts/{post_id}", response_model=PostRead)
+async def update_post(
+    post_id: int,
+    payload: PostUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Post:
+    post = session.exec(select(Post).where(Post.id == post_id, Post.owner_id == current_user.id)).first()
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    plain_search_text = f"{payload.title}\n{payload.content}"
+    keyword_matches = find_keyword_matches(plain_search_text, payload.keywords)
+    post.title = payload.title.strip()
+    post.content = payload.content.strip()
+    post.category = payload.category.strip() or "未分类"
+    post.cover_url = payload.cover_url.strip()
+    post.summary = build_summary(payload.content)
+    post.tags = generate_tags(payload.title, payload.content, keyword_matches)
+    post.keyword_matches = keyword_matches
+    post.updated_at = datetime.now(timezone.utc)
 
     session.add(post)
     session.commit()
@@ -186,6 +219,19 @@ async def list_posts(
     posts = session.exec(statement).all()
     total = session.exec(count_statement).one()
     return PostList(posts=posts, total=total)
+
+
+@router.delete("/posts/{post_id}", status_code=204)
+async def delete_post(
+    post_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> None:
+    post = session.exec(select(Post).where(Post.id == post_id, Post.owner_id == current_user.id)).first()
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    session.delete(post)
+    session.commit()
 
 
 @router.get("/posts/{post_id}", response_model=PostRead)
@@ -255,15 +301,27 @@ async def list_messages(
 
 @router.post("/photos", response_model=PhotoRead, status_code=201)
 async def create_photo(
-    payload: PhotoCreate,
+    title: str = Form(min_length=1, max_length=100),
+    description: str = Form(default="", max_length=240),
+    file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> Photo:
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+    ext = os.path.splitext(file.filename or "image.jpg")[1] or ".jpg"
+    filename = f"{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+
+    content = await file.read()
+    with open(filepath, "wb") as fh:
+        fh.write(content)
+
     photo = Photo(
         owner_id=current_user.id,
-        title=payload.title.strip(),
-        image_url=payload.image_url.strip(),
-        description=payload.description.strip(),
+        title=title.strip(),
+        image_url=filename,
+        description=description.strip(),
     )
     session.add(photo)
     session.commit()
@@ -282,6 +340,14 @@ async def list_photos(
     return PhotoList(photos=photos, total=total)
 
 
+@router.get("/photos/file/{filename}")
+async def get_photo_file(filename: str) -> FileResponse:
+    filepath = os.path.join(UPLOAD_DIR, filename)
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(filepath)
+
+
 @router.delete("/photos/{photo_id}", status_code=204)
 async def delete_photo(
     photo_id: int,
@@ -291,5 +357,11 @@ async def delete_photo(
     photo = session.exec(select(Photo).where(Photo.id == photo_id, Photo.owner_id == current_user.id)).first()
     if photo is None:
         raise HTTPException(status_code=404, detail="Photo not found")
+
+    if not photo.image_url.startswith("data:"):
+        filepath = os.path.join(UPLOAD_DIR, photo.image_url)
+        if os.path.isfile(filepath):
+            os.remove(filepath)
+
     session.delete(photo)
     session.commit()

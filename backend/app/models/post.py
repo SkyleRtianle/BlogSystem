@@ -8,6 +8,7 @@ class PostBase(SQLModel):
     title: str = Field(min_length=1, max_length=160)
     content: str = Field(min_length=1)
     category: str = Field(default="未分类", max_length=60)
+    cover_url: str = Field(default="")
 
 
 class Post(PostBase, table=True):
@@ -21,6 +22,10 @@ class Post(PostBase, table=True):
 
 
 class PostCreate(PostBase):
+    keywords: list[str] = Field(default_factory=list)
+
+
+class PostUpdate(PostBase):
     keywords: list[str] = Field(default_factory=list)
 
 

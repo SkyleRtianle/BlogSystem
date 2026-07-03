@@ -56,7 +56,7 @@ class MessageList(SQLModel):
 
 class PhotoBase(SQLModel):
     title: str = Field(min_length=1, max_length=100)
-    image_url: str = Field(min_length=1, max_length=3_000_000)
+    image_url: str = Field(min_length=1, max_length=500)
     description: str = Field(default="", max_length=240)
 
 
