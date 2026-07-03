@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChangeEvent, FormEvent, MouseEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, MouseEvent, useCallback, useEffect, useState } from "react";
 import {
   authHeaders,
   clearAuthSession,
@@ -120,9 +120,6 @@ export default function ArticlesPage() {
 
     return () => window.clearTimeout(timer);
   }, [fetchPosts]);
-
-  const fetchPostsRef = useRef(fetchPosts);
-  fetchPostsRef.current = fetchPosts;
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -273,7 +270,6 @@ export default function ArticlesPage() {
                 >
                   <SearchBar
                     keyword={searchKeyword}
-                    total={totalPosts}
                     isLoading={isLoadingPosts}
                     onKeywordChange={setSearchKeyword}
                     onSubmit={submitSearch}
@@ -551,13 +547,11 @@ function ArticleComposer({
 
 function SearchBar({
   keyword,
-  total,
   isLoading,
   onKeywordChange,
   onSubmit,
 }: {
   keyword: string;
-  total: number;
   isLoading: boolean;
   onKeywordChange: (keyword: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;

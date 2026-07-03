@@ -98,6 +98,7 @@ export default function PhotosPage() {
   const currentUser = useAuthUser();
   const albums = useMemo(() => buildAlbums(photos), [photos]);
   const activeAlbum = albums.find((album) => album.id === activeAlbumId) ?? null;
+  const activeAlbumPhotoCount = activeAlbum?.photos.length ?? 0;
   const activePhoto = activeAlbum && activePhotoIndex !== null ? activeAlbum.photos[activePhotoIndex] : null;
 
   const fetchPhotos = useCallback(async () => {
@@ -134,21 +135,23 @@ export default function PhotosPage() {
     return () => window.removeEventListener("click", closeMenu);
   }, [contextMenu]);
 
-  const showPreviousPhoto = useCallback(() => {
-    if (!activeAlbum || activePhotoIndex === null) return;
-    setActivePhotoIndex((activePhotoIndex - 1 + activeAlbum.photos.length) % activeAlbum.photos.length);
-  }, [activeAlbum, activePhotoIndex]);
+  const movePhoto = (direction: -1 | 1) => {
+    if (activeAlbumPhotoCount === 0) return;
+    setActivePhotoIndex((currentIndex) => {
+      if (currentIndex === null) return currentIndex;
+      return (currentIndex + direction + activeAlbumPhotoCount) % activeAlbumPhotoCount;
+    });
+  };
 
-  const showNextPhoto = useCallback(() => {
-    if (!activeAlbum || activePhotoIndex === null) return;
-    setActivePhotoIndex((activePhotoIndex + 1) % activeAlbum.photos.length);
-  }, [activeAlbum, activePhotoIndex]);
+  const showPreviousPhoto = () => movePhoto(-1);
 
-  const startPhotoSwipe = useCallback((event: TouchEvent<HTMLDivElement>) => {
+  const showNextPhoto = () => movePhoto(1);
+
+  const startPhotoSwipe = (event: TouchEvent<HTMLDivElement>) => {
     lightboxTouchStartXRef.current = event.touches[0]?.clientX ?? null;
-  }, []);
+  };
 
-  const endPhotoSwipe = useCallback((event: TouchEvent<HTMLDivElement>) => {
+  const endPhotoSwipe = (event: TouchEvent<HTMLDivElement>) => {
     const startX = lightboxTouchStartXRef.current;
     lightboxTouchStartXRef.current = null;
     if (startX === null) return;
@@ -157,18 +160,30 @@ export default function PhotosPage() {
     if (Math.abs(deltaX) < 48) return;
     if (deltaX > 0) showPreviousPhoto();
     else showNextPhoto();
-  }, [showNextPhoto, showPreviousPhoto]);
+  };
 
   useEffect(() => {
     if (!activePhoto) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "ArrowLeft") showPreviousPhoto();
-      if (event.key === "ArrowRight") showNextPhoto();
+      if (event.key === "ArrowLeft") {
+        if (activeAlbumPhotoCount === 0) return;
+        setActivePhotoIndex((currentIndex) => {
+          if (currentIndex === null) return currentIndex;
+          return (currentIndex - 1 + activeAlbumPhotoCount) % activeAlbumPhotoCount;
+        });
+      }
+      if (event.key === "ArrowRight") {
+        if (activeAlbumPhotoCount === 0) return;
+        setActivePhotoIndex((currentIndex) => {
+          if (currentIndex === null) return currentIndex;
+          return (currentIndex + 1) % activeAlbumPhotoCount;
+        });
+      }
       if (event.key === "Escape") setActivePhotoIndex(null);
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activePhoto, showNextPhoto, showPreviousPhoto]);
+  }, [activeAlbumPhotoCount, activePhoto]);
 
   const uploadPhotos = useCallback(
     async (files: File[]) => {
@@ -326,7 +341,7 @@ export default function PhotosPage() {
 
         {albums.length === 0 && (
           <div className="photo-empty-state">
-            暂无相册。点击添加相册后，会以堆叠卡片形式展示在这里。
+            暂无相册。点击上传相册后，会以堆叠卡片形式展示在这里。
           </div>
         )}
 
