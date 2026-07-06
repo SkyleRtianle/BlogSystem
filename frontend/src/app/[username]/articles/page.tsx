@@ -29,6 +29,7 @@ export default function PublicArticlesPage() {
   const [totalPosts, setTotalPosts] = useState(0);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [message, setMessage] = useState("");
+  const [dataReady, setDataReady] = useState(false);
   const [expandedTimelineKey, setExpandedTimelineKey] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
@@ -55,6 +56,24 @@ export default function PublicArticlesPage() {
     return () => window.clearTimeout(timer);
   }, [fetchPosts]);
 
+  useEffect(() => {
+    if (!isLoadingPosts) {
+      const raf1 = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setDataReady(true);
+        });
+      });
+      return () => cancelAnimationFrame(raf1);
+    }
+  }, [isLoadingPosts]);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      document.querySelector(".page-fade-in")?.classList.add("page-fade-in-ready");
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   const submitSearch = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsSearchOpen(false);
@@ -69,9 +88,9 @@ export default function PublicArticlesPage() {
       {showWallpaper && !isNight && <div className="home-global-wallpaper" style={{ filter: "blur(12px) saturate(0.82)" }} />}
       <PublicHeader active="文章" username={username} isNight={isNight} showWallpaper={showWallpaper} glassAlpha={glassAlpha} onGlassAlphaChange={setGlassAlpha} onToggleNight={toggleNight} onToggleWallpaper={toggleWallpaper} />
 
-      <section className="articles-page articles-wall relative z-10 mx-auto w-full max-w-none px-0 pb-16 pt-8">
+      <section className="articles-page articles-wall page-fade-in relative z-10 mx-auto w-full max-w-none px-0 pb-16 pt-8">
         <section className="articles-album-section" aria-label="文章流" onClick={() => setIsSearchOpen(false)}>
-          <div className="articles-timeline-actions">
+          <div className="articles-timeline-actions card-fly-in" style={{ animationDelay: "0ms" }}>
             <div className="articles-search-control" onClick={(event) => event.stopPropagation()}>
               <button
                 type="button"
@@ -97,8 +116,16 @@ export default function PublicArticlesPage() {
           </div>
 
           {isLoadingPosts && (
-            <div className="articles-album-grid">
-              {Array.from({ length: 5 }).map((_, i) => <div key={i} className="articles-album-skeleton" />)}
+            <div className="articles-skeleton-timeline">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="articles-skeleton-group">
+                  <div className="articles-skeleton-marker">
+                    <div className="articles-skeleton-dot" />
+                    <div className="articles-skeleton-date" />
+                  </div>
+                  <div className="articles-skeleton-card" />
+                </div>
+              ))}
             </div>
           )}
 
@@ -111,8 +138,8 @@ export default function PublicArticlesPage() {
 
           {!isLoadingPosts && posts.length > 0 && (
             <div className="articles-timeline">
-              {timelineGroups.map((group) => (
-                <section key={group.key} className={`articles-timeline-group ${expandedTimelineKey === group.key ? "articles-timeline-group-expanded" : ""}`}>
+              {timelineGroups.map((group, gi) => (
+                <section key={group.key} className={`articles-timeline-group ${dataReady ? "card-fly-in" : "card-init-hidden"} ${expandedTimelineKey === group.key ? "articles-timeline-group-expanded" : ""}`} style={dataReady ? { animationDelay: `${gi * 100}ms` } : undefined}>
                   <div className="articles-timeline-marker">
                     <span />
                     <time dateTime={group.key}>{group.label}</time>

@@ -293,6 +293,21 @@ async def list_friend_links(
     return FriendLinkList(links=links, total=total)
 
 
+@router.delete("/links/{link_id}", status_code=204)
+async def delete_friend_link(
+    link_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> None:
+    link = session.get(FriendLink, link_id)
+    if link is None:
+        raise HTTPException(status_code=404, detail="Link not found")
+    if link.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this link")
+    session.delete(link)
+    session.commit()
+
+
 @router.post("/messages", response_model=MessageRead, status_code=201)
 async def create_message(
     payload: MessageCreate,

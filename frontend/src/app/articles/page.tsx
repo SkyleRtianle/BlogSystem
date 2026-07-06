@@ -68,6 +68,7 @@ export default function ArticlesPage() {
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [isPublishing, setIsPublishing] = useState(false);
   const [message, setMessage] = useState("在这里发布 Markdown 文章，系统会自动处理标签。");
+  const [dataReady, setDataReady] = useState(false);
   const [expandedTimelineKey, setExpandedTimelineKey] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
@@ -120,6 +121,24 @@ export default function ArticlesPage() {
 
     return () => window.clearTimeout(timer);
   }, [fetchPosts]);
+
+  useEffect(() => {
+    if (!isLoadingPosts) {
+      const raf1 = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setDataReady(true);
+        });
+      });
+      return () => cancelAnimationFrame(raf1);
+    }
+  }, [isLoadingPosts]);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      document.querySelector(".page-fade-in")?.classList.add("page-fade-in-ready");
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -232,13 +251,13 @@ export default function ArticlesPage() {
     <main className={`home-shell min-h-screen ${isNight ? "home-night bg-black text-slate-100" : !showWallpaper ? "bg-white text-slate-900" : "text-slate-900"}`} style={{ "--glass-alpha": glassAlpha } as React.CSSProperties}>
       {showWallpaper && !isNight && <div className="home-global-wallpaper" style={{ filter: "blur(12px) saturate(0.82)" }} />}
       <SiteHeader active="文章" isNight={isNight} showWallpaper={showWallpaper} glassAlpha={glassAlpha} onGlassAlphaChange={setGlassAlpha} onToggleNight={toggleNight} onToggleWallpaper={toggleWallpaper} user={currentUser} onLogout={logout} />
-      <section className="articles-page articles-wall relative z-10 mx-auto w-full max-w-none px-0 pb-16 pt-8">
+      <section className="articles-page articles-wall page-fade-in relative z-10 mx-auto w-full max-w-none px-0 pb-16 pt-8">
         <section
           className="articles-album-section"
           aria-label="文章流"
           onClick={() => setIsSearchOpen(false)}
         >
-          <div className="articles-timeline-actions">
+          <div className="articles-timeline-actions card-fly-in" style={{ animationDelay: "0ms" }}>
             <button
               type="button"
               className="articles-compose-button"
@@ -279,9 +298,15 @@ export default function ArticlesPage() {
             </div>
           </div>
           {isLoadingPosts && (
-            <div className="articles-album-grid">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <div key={index} className="articles-album-skeleton" />
+            <div className="articles-skeleton-timeline">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="articles-skeleton-group">
+                  <div className="articles-skeleton-marker">
+                    <div className="articles-skeleton-dot" />
+                    <div className="articles-skeleton-date" />
+                  </div>
+                  <div className="articles-skeleton-card" />
+                </div>
               ))}
             </div>
           )}
@@ -293,10 +318,11 @@ export default function ArticlesPage() {
           )}
           {!isLoadingPosts && posts.length > 0 && (
             <div className="articles-timeline">
-              {timelineGroups.map((group) => (
+              {timelineGroups.map((group, gi) => (
                 <section
                   key={group.key}
-                  className={`articles-timeline-group ${expandedTimelineKey === group.key ? "articles-timeline-group-expanded" : ""}`}
+                  className={`articles-timeline-group ${dataReady ? "card-fly-in" : "card-init-hidden"} ${expandedTimelineKey === group.key ? "articles-timeline-group-expanded" : ""}`}
+                  style={dataReady ? { animationDelay: `${gi * 100}ms` } : undefined}
                 >
                   <div className="articles-timeline-marker">
                     <span />

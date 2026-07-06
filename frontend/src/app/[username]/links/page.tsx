@@ -156,7 +156,10 @@ export default function PublicLinksPage() {
                 position: "absolute", left: cx, top: cy,
                 width: radius * 2, height: radius * 2,
                 transform: "translate(-50%, -50%)",
-                animation: `orbitSpin ${speed}s linear infinite`,
+                animationName: "orbitSpin",
+                animationDuration: `${speed}s`,
+                animationTimingFunction: "linear",
+                animationIterationCount: "infinite",
                 animationPlayState: activeId !== null ? "paused" : "running",
               }}>
               <a href={link.url} target="_blank" rel="noopener noreferrer" data-link-id={link.id}
@@ -166,7 +169,10 @@ export default function PublicLinksPage() {
                   left: `calc(50% + ${radius * Math.cos(startAngle)}px)`,
                   top: `calc(50% + ${radius * Math.sin(startAngle)}px)`,
                   transform: "translate(-50%, -50%)",
-                  animation: `orbitCounterSpin ${speed}s linear infinite`,
+                  animationName: "orbitCounterSpin",
+                  animationDuration: `${speed}s`,
+                  animationTimingFunction: "linear",
+                  animationIterationCount: "infinite",
                   animationPlayState: activeId !== null ? "paused" : "running",
                 }}
                 onMouseEnter={() => setHoveredId(link.id)}

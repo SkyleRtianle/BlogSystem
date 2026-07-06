@@ -36,6 +36,7 @@ export default function PublicHomePage() {
   const [totalPosts, setTotalPosts] = useState(0);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [postsError, setPostsError] = useState("");
+  const [dataReady, setDataReady] = useState(false);
 
   const fetchPosts = useCallback(async () => {
     setIsLoadingPosts(true);
@@ -59,6 +60,24 @@ export default function PublicHomePage() {
     const timer = window.setTimeout(() => { void fetchPosts(); }, 0);
     return () => window.clearTimeout(timer);
   }, [fetchPosts]);
+
+  useEffect(() => {
+    if (!isLoadingPosts) {
+      const raf1 = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setDataReady(true);
+        });
+      });
+      return () => cancelAnimationFrame(raf1);
+    }
+  }, [isLoadingPosts]);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      document.querySelector(".page-fade-in")?.classList.add("page-fade-in-ready");
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   const categories = useMemo(() => {
     const counts = posts.reduce<Record<string, number>>((acc, post) => {
@@ -96,20 +115,20 @@ export default function PublicHomePage() {
 
       <PublicHeader active="主页" username={username} isNight={isNight} showWallpaper={showWallpaper} glassAlpha={glassAlpha} onGlassAlphaChange={setGlassAlpha} onToggleNight={toggleNight} onToggleWallpaper={toggleWallpaper} />
 
-      <section className="home-content-panel relative z-10 px-[80px] pb-16 mt-[380px] xl:mt-0 pt-8">
+      <section className="home-content-panel page-fade-in relative z-10 px-[80px] pb-16 mt-[380px] xl:mt-0 pt-8">
         <div className="home-dashboard-grid mx-auto grid max-w-[1700px] gap-5 xl:grid-cols-[1fr_3fr_1fr]">
           <aside className="home-static-column space-y-5 xl:self-start">
-            <PublicProfileCard username={username} />
-            <NoticeCard />
+            <PublicProfileCard username={username} index={0} />
+            <NoticeCard index={1} />
           </aside>
 
           <section data-home-scroll-column className="home-scroll-column">
-            <LatestPosts posts={posts} isLoading={isLoadingPosts} error={postsError} categories={categories} username={username} />
+            <LatestPosts posts={posts} isLoading={isLoadingPosts} error={postsError} categories={categories} username={username} dataReady={dataReady} />
           </section>
 
           <aside className="home-static-column space-y-5 xl:self-start">
-            <CalendarCard />
-            <StatsCard stats={homeStats} />
+            <CalendarCard index={2} dataReady={dataReady} />
+            <StatsCard stats={homeStats} index={3} dataReady={dataReady} />
           </aside>
         </div>
       </section>
@@ -127,13 +146,14 @@ export default function PublicHomePage() {
 }
 
 function LatestPosts({
-  posts, isLoading, error, categories, username,
+  posts, isLoading, error, categories, username, dataReady,
 }: {
   posts: BlogPost[];
   isLoading: boolean;
   error: string;
   categories: Array<{ name: string; count: number }>;
   username: string;
+  dataReady: boolean;
 }) {
   const tags = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -145,7 +165,7 @@ function LatestPosts({
 
   return (
     <section className="space-y-5">
-      <div className="home-card space-y-4 p-4">
+      <div className={`home-card space-y-4 p-4 ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: "160ms" } : undefined}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="home-section-title">最新文章</h2>
           <Link href={`/${username}/articles`} className="home-pill-button">查看全部</Link>
@@ -176,13 +196,30 @@ function LatestPosts({
         )}
       </div>
 
-      {isLoading && <div className="home-card p-6 text-sm font-semibold text-slate-700">正在加载文章...</div>}
+      {isLoading && (
+        <div className="home-skeleton-grid">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="home-skeleton-card">
+              <div className="home-skeleton-cover" style={{ height: `${[150, 210, 176, 238, 188, 260][i % 6]}px` }} />
+              <div className="home-skeleton-lines">
+                <div className="home-skeleton-line" />
+                <div className="home-skeleton-line" />
+                <div className="home-skeleton-line" />
+              </div>
+              <div className="home-skeleton-tags">
+                <div className="home-skeleton-tag" />
+                <div className="home-skeleton-tag" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {!isLoading && error && <div className="home-card p-6 text-sm leading-7 text-slate-700">{error}。请确认后端服务正在运行。</div>}
       {!isLoading && !error && posts.length === 0 && <div className="home-card p-6 text-sm leading-7 text-slate-700">还没有文章。</div>}
       {posts.length > 0 && (
         <div className="home-masonry-feed">
           {posts.map((post, index) => (
-            <PostCard key={post.id} post={post} index={index} username={username} />
+            <PostCard key={post.id} post={post} index={index} username={username} dataReady={dataReady} />
           ))}
         </div>
       )}
@@ -190,10 +227,10 @@ function LatestPosts({
   );
 }
 
-function PublicProfileCard({ username }: { username: string }) {
+function PublicProfileCard({ username, index = 0 }: { username: string; index?: number }) {
   const initial = username.slice(0, 1).toUpperCase();
   return (
-    <div className="home-card p-4 text-center">
+    <div className="home-card card-fly-in p-4 text-center" style={{ animationDelay: `${index * 80}ms` }}>
       <div className="profile-avatar-frame mx-auto">
         <span>{initial}</span>
       </div>
@@ -204,16 +241,16 @@ function PublicProfileCard({ username }: { username: string }) {
   );
 }
 
-function NoticeCard() {
+function NoticeCard({ index = 0 }: { index?: number }) {
   return (
-    <div className="home-card p-5">
+    <div className="home-card card-fly-in p-5" style={{ animationDelay: `${index * 80}ms` }}>
       <h2 className="home-section-title">公告</h2>
       <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">{DEFAULT_NOTICE}</p>
     </div>
   );
 }
 
-function PostCard({ post, index, username }: { post: BlogPost; index: number; username: string }) {
+function PostCard({ post, index, username, dataReady = true }: { post: BlogPost; index: number; username: string; dataReady?: boolean }) {
   const imageHeights = [150, 210, 176, 238, 188, 260];
   const imageHeight = imageHeights[index % imageHeights.length];
   const coverBg = post.cover_url
@@ -221,7 +258,7 @@ function PostCard({ post, index, username }: { post: BlogPost; index: number; us
     : `linear-gradient(135deg, rgba(16,185,129,.12), rgba(14,165,233,.12)), url('/images/home-background.png')`;
 
   return (
-    <Link href={`/${username}/articles/${post.id}`} className="home-masonry-card block no-underline">
+    <Link href={`/${username}/articles/${post.id}`} className={`home-masonry-card block no-underline ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: `${240 + index * 70}ms` } : undefined}>
       <article className="home-card home-clickable-card overflow-hidden">
         <div className="bg-cover bg-center shadow-inner" style={{
           height: imageHeight,
@@ -247,9 +284,9 @@ function PostCard({ post, index, username }: { post: BlogPost; index: number; us
   );
 }
 
-function StatsCard({ stats }: { stats: string[][] }) {
+function StatsCard({ stats, index = 0, dataReady = true }: { stats: string[][]; index?: number; dataReady?: boolean }) {
   return (
-    <div className="home-card p-4">
+    <div className={`home-card p-4 ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: `${index * 80}ms` } : undefined}>
       <h2 className="home-section-title">站点统计</h2>
       <div className="mt-3 space-y-2">
         {stats.map(([label, value]) => (
@@ -263,7 +300,7 @@ function StatsCard({ stats }: { stats: string[][] }) {
   );
 }
 
-function CalendarCard() {
+function CalendarCard({ index = 0, dataReady = true }: { index?: number; dataReady?: boolean }) {
   const today = useMemo(() => stripTime(new Date()), []);
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(today));
   const [selectedDate, setSelectedDate] = useState(today);
@@ -272,7 +309,7 @@ function CalendarCard() {
   const selectedLabel = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" }).format(selectedDate);
 
   return (
-    <div className="home-card p-4">
+    <div className={`home-card p-4 ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: `${index * 80}ms` } : undefined}>
       <div className="flex items-center justify-between">
         <button type="button" className="calendar-nav-button" onClick={() => setVisibleMonth((c) => addMonths(c, -1))} aria-label="上个月">‹</button>
         <button type="button" className="calendar-title-button" onClick={() => { setVisibleMonth(startOfMonth(today)); setSelectedDate(today); }} title="回到今天">{monthTitle}</button>

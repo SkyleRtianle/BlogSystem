@@ -66,6 +66,7 @@ export default function HomePage() {
   const [totalPosts, setTotalPosts] = useState(0);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [postsError, setPostsError] = useState("");
+  const [dataReady, setDataReady] = useState(false);
   const currentUser = useAuthUser();
   const router = useRouter();
   const touchStartY = useRef<number | null>(null);
@@ -116,6 +117,24 @@ export default function HomePage() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [fetchPosts]);
+
+  useEffect(() => {
+    if (!isLoadingPosts) {
+      const raf1 = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setDataReady(true);
+        });
+      });
+      return () => cancelAnimationFrame(raf1);
+    }
+  }, [isLoadingPosts]);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      document.querySelector(".page-fade-in")?.classList.add("page-fade-in-ready");
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -286,21 +305,21 @@ export default function HomePage() {
       />
 
       <section
-        className="home-content-panel relative z-10 px-[80px] pb-16 mt-[380px] xl:mt-0 pt-8"
+        className="home-content-panel page-fade-in relative z-10 px-[80px] pb-16 mt-[380px] xl:mt-0 pt-8"
       >
         <div className="home-dashboard-grid mx-auto grid max-w-[1700px] gap-5 xl:grid-cols-[1fr_3fr_1fr]">
           <aside className="home-static-column space-y-5 xl:self-start">
-            <ProfileCard user={currentUser} settings={profileSettings} onEdit={openProfileEditor} />
-            <NoticeCard notice={profileSettings.notice} />
+            <ProfileCard user={currentUser} settings={profileSettings} onEdit={openProfileEditor} index={0} />
+            <NoticeCard notice={profileSettings.notice} index={1} />
           </aside>
 
           <section data-home-scroll-column className="home-scroll-column">
-            <LatestPosts posts={posts} isLoading={isLoadingPosts} error={postsError} categories={categories} />
+            <LatestPosts posts={posts} isLoading={isLoadingPosts} error={postsError} categories={categories} dataReady={dataReady} />
           </section>
 
           <aside className="home-static-column space-y-5 xl:self-start">
-            <CalendarCard />
-            <StatsCard stats={homeStats} />
+            <CalendarCard index={2} dataReady={dataReady} />
+            <StatsCard stats={homeStats} index={3} dataReady={dataReady} />
           </aside>
         </div>
       </section>
@@ -333,11 +352,13 @@ function LatestPosts({
   isLoading,
   error,
   categories,
+  dataReady,
 }: {
   posts: BlogPost[];
   isLoading: boolean;
   error: string;
   categories: Array<{ name: string; count: number }>;
+  dataReady: boolean;
 }) {
   const tags = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -351,7 +372,7 @@ function LatestPosts({
 
   return (
     <section className="space-y-5">
-      <div className="home-card space-y-4 p-4">
+      <div className={`home-card space-y-4 p-4 ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: "160ms" } : undefined}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="home-section-title">最新文章</h2>
           <Link href="/articles" className="home-pill-button">查看全部</Link>
@@ -389,7 +410,22 @@ function LatestPosts({
       </div>
 
       {isLoading && (
-        <div className="home-card p-6 text-sm font-semibold text-slate-700">正在加载文章...</div>
+        <div className="home-skeleton-grid">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="home-skeleton-card">
+              <div className="home-skeleton-cover" style={{ height: `${[150, 210, 176, 238, 188, 260][i % 6]}px` }} />
+              <div className="home-skeleton-lines">
+                <div className="home-skeleton-line" />
+                <div className="home-skeleton-line" />
+                <div className="home-skeleton-line" />
+              </div>
+              <div className="home-skeleton-tags">
+                <div className="home-skeleton-tag" />
+                <div className="home-skeleton-tag" />
+              </div>
+            </div>
+          ))}
+        </div>
       )}
       {!isLoading && error && (
         <div className="home-card p-6 text-sm leading-7 text-slate-700">
@@ -404,7 +440,7 @@ function LatestPosts({
       {posts.length > 0 && (
         <div className="home-masonry-feed">
           {posts.map((post, index) => (
-            <PostCard key={post.id} post={post} index={index} />
+            <PostCard key={post.id} post={post} index={index} dataReady={dataReady} />
           ))}
         </div>
       )}
@@ -416,10 +452,12 @@ function ProfileCard({
   user,
   settings,
   onEdit,
+  index = 0,
 }: {
   user: AuthUser | null;
   settings: ProfileSettings;
   onEdit: () => void;
+  index?: number;
 }) {
   const displayName = settings.displayName || user?.nickname || user?.email?.split("@", 1)[0] || "Skyler";
   const email = settings.email || user?.email || "";
@@ -440,7 +478,8 @@ function ProfileCard({
 
   return (
     <div
-      className="home-card profile-card-button p-4 text-center"
+      className="home-card card-fly-in profile-card-button p-4 text-center"
+      style={{ animationDelay: `${index * 80}ms` }}
       role="button"
       tabIndex={0}
       onClick={onEdit}
@@ -544,9 +583,9 @@ function ContactIcon({ name }: { name: "github" | "mail" | "qq" }) {
   );
 }
 
-function NoticeCard({ notice }: { notice: string }) {
+function NoticeCard({ notice, index = 0 }: { notice: string; index?: number }) {
   return (
-    <div className="home-card p-5">
+    <div className="home-card card-fly-in p-5" style={{ animationDelay: `${index * 80}ms` }}>
       <h2 className="home-section-title">公告</h2>
       <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">{notice || DEFAULT_NOTICE}</p>
     </div>
@@ -699,7 +738,7 @@ function ProfileEditor({
   );
 }
 
-function PostCard({ post, index }: { post: BlogPost; index: number }) {
+function PostCard({ post, index, dataReady = true }: { post: BlogPost; index: number; dataReady?: boolean }) {
   const imageHeights = [150, 210, 176, 238, 188, 260];
   const imageHeight = imageHeights[index % imageHeights.length];
   const coverBg = post.cover_url
@@ -707,7 +746,7 @@ function PostCard({ post, index }: { post: BlogPost; index: number }) {
     : `linear-gradient(135deg, rgba(16,185,129,.12), rgba(14,165,233,.12)), url('/images/home-background.png')`;
 
   return (
-    <Link href={`/articles/${post.id}`} className="home-masonry-card block no-underline">
+    <Link href={`/articles/${post.id}`} className={`home-masonry-card block no-underline ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: `${240 + index * 70}ms` } : undefined}>
       <article className="home-card home-clickable-card overflow-hidden">
         <div
           className="bg-cover bg-center shadow-inner"
@@ -742,9 +781,9 @@ function PostCard({ post, index }: { post: BlogPost; index: number }) {
   );
 }
 
-function StatsCard({ stats }: { stats: string[][] }) {
+function StatsCard({ stats, index = 0, dataReady = true }: { stats: string[][]; index?: number; dataReady?: boolean }) {
   return (
-    <div className="home-card p-4">
+    <div className={`home-card p-4 ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: `${index * 80}ms` } : undefined}>
       <h2 className="home-section-title">站点统计</h2>
       <div className="mt-3 space-y-2">
         {stats.map(([label, value]) => (
@@ -758,7 +797,7 @@ function StatsCard({ stats }: { stats: string[][] }) {
   );
 }
 
-function CalendarCard() {
+function CalendarCard({ index = 0, dataReady = true }: { index?: number; dataReady?: boolean }) {
   const today = useMemo(() => stripTime(new Date()), []);
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(today));
   const [selectedDate, setSelectedDate] = useState(today);
@@ -786,7 +825,7 @@ function CalendarCard() {
   }, [today]);
 
   return (
-    <div className="home-card p-4">
+    <div className={`home-card p-4 ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: `${index * 80}ms` } : undefined}>
       <div className="flex items-center justify-between">
         <button type="button" className="calendar-nav-button" onClick={goPreviousMonth} aria-label="上个月">
           ‹

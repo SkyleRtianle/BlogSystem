@@ -31,6 +31,7 @@ export default function LinksPage() {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [lockedId, setLockedId] = useState<number | null>(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ linkId: number; x: number; y: number } | null>(null);
   const activeId = lockedId ?? hoveredId;
   const [viewportSize, setViewportSize] = useState({ w: 1200, h: 800 });
   const [beamLine, setBeamLine] = useState<{ x: number; y: number } | null>(null);
@@ -81,6 +82,26 @@ export default function LinksPage() {
     } catch (e) { setMessage(e instanceof Error ? e.message : "提交失败"); }
     finally { setIsSubmitting(false); }
   }, [form]);
+
+  const deleteLink = useCallback(async (linkId: number) => {
+    setContextMenu(null);
+    try {
+      const token = requireAuthToken();
+      if (!token) return;
+      const res = await fetch(`${API_BASE_URL}/links/${linkId}`, { method: "DELETE", headers: authHeaders(token) });
+      ensureAuthorized(res);
+      if (!res.ok) throw new Error("删除失败");
+      setLinks((c) => c.filter((l) => l.id !== linkId));
+      if (lockedId === linkId) setLockedId(null);
+    } catch (e) { setMessage(e instanceof Error ? e.message : "删除失败"); }
+  }, [lockedId]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [contextMenu]);
 
   const logout = useCallback(() => { clearAuthSession(); redirectToLogin(); }, []);
 
@@ -182,7 +203,10 @@ export default function LinksPage() {
                 position: "absolute", left: cx, top: cy,
                 width: radius * 2, height: radius * 2,
                 transform: "translate(-50%, -50%)",
-                animation: `orbitSpin ${speed}s linear infinite`,
+                animationName: "orbitSpin",
+                animationDuration: `${speed}s`,
+                animationTimingFunction: "linear",
+                animationIterationCount: "infinite",
                 animationPlayState: activeId !== null ? "paused" : "running",
               }}>
               <a href={link.url} target="_blank" rel="noopener noreferrer" data-link-id={link.id}
@@ -192,11 +216,15 @@ export default function LinksPage() {
                   left: `calc(50% + ${radius * Math.cos(startAngle)}px)`,
                   top: `calc(50% + ${radius * Math.sin(startAngle)}px)`,
                   transform: "translate(-50%, -50%)",
-                  animation: `orbitCounterSpin ${speed}s linear infinite`,
+                  animationName: "orbitCounterSpin",
+                  animationDuration: `${speed}s`,
+                  animationTimingFunction: "linear",
+                  animationIterationCount: "infinite",
                   animationPlayState: activeId !== null ? "paused" : "running",
                 }}
                 onMouseEnter={() => setHoveredId(link.id)}
-                onMouseLeave={() => setHoveredId(null)}>
+                onMouseLeave={() => setHoveredId(null)}
+                onContextMenu={(e) => { e.preventDefault(); setContextMenu({ linkId: link.id, x: e.clientX, y: e.clientY }); }}>
                 <div className="orbital-node-dot">
                   <span className="orbital-node-initial">{link.name.charAt(0).toUpperCase()}</span>
                 </div>
@@ -232,6 +260,7 @@ export default function LinksPage() {
                 onClick={() => setLockedId(lockedId === link.id ? null : link.id)}
                 onMouseEnter={() => setHoveredId(link.id)}
                 onMouseLeave={() => setHoveredId(null)}
+                onContextMenu={(e) => { e.preventDefault(); setContextMenu({ linkId: link.id, x: e.clientX, y: e.clientY }); }}
               >
                 <span className="link-overview-dot" />
                 <span className="link-overview-name">{link.name}</span>
@@ -270,6 +299,13 @@ export default function LinksPage() {
           <div className="orbital-center-glow" />
           <div className="orbital-center-core"><span>{currentUser?.nickname?.charAt(0)?.toUpperCase() || "S"}</span></div>
         </div>
+
+        {contextMenu && (
+          <div className="photo-context-menu" style={{ left: contextMenu.x, top: contextMenu.y, position: "fixed", zIndex: 100 }}
+            onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => void deleteLink(contextMenu.linkId)}>删除友链</button>
+          </div>
+        )}
 
       </section>
 

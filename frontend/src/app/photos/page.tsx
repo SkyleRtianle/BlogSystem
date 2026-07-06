@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth";
 import SiteHeader from "@/components/SiteHeader";
 import ImageCropper from "@/components/ImageCropper";
+import LoadableImage from "@/components/LoadableImage";
 import { useAppSettings } from "@/lib/useAppSettings";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
@@ -86,6 +87,8 @@ export default function PhotosPage() {
   const { isNight, showWallpaper, glassAlpha, setGlassAlpha, toggleNight, toggleWallpaper } = useAppSettings();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [dataReady, setDataReady] = useState(false);
+  const [fetchComplete, setFetchComplete] = useState(false);
   const [activeAlbumId, setActiveAlbumId] = useState<string | null>(null);
   const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -118,6 +121,8 @@ export default function PhotosPage() {
     } catch (error) {
       setPhotos([]);
       console.error(error);
+    } finally {
+      setFetchComplete(true);
     }
   }, []);
 
@@ -127,6 +132,24 @@ export default function PhotosPage() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [fetchPhotos]);
+
+  useEffect(() => {
+    if (fetchComplete) {
+      const raf1 = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setDataReady(true);
+        });
+      });
+      return () => cancelAnimationFrame(raf1);
+    }
+  }, [fetchComplete]);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      document.querySelector(".page-fade-in")?.classList.add("page-fade-in-ready");
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -315,9 +338,9 @@ export default function PhotosPage() {
     <main className={`home-shell min-h-screen ${isNight ? "home-night bg-black text-slate-100" : !showWallpaper ? "bg-white text-slate-900" : "text-slate-900"}`} style={{ "--glass-alpha": glassAlpha } as React.CSSProperties}>
       {showWallpaper && !isNight && <div className="home-global-wallpaper" style={{ filter: "blur(12px) saturate(0.82)" }} />}
       <SiteHeader active="照片墙" isNight={isNight} showWallpaper={showWallpaper} glassAlpha={glassAlpha} onGlassAlphaChange={setGlassAlpha} onToggleNight={toggleNight} onToggleWallpaper={toggleWallpaper} user={currentUser} onLogout={logout} />
-      <section className="photo-wall-layout mx-auto max-w-[1500px] px-4 py-8 sm:px-8 xl:px-[80px]">
+      <section className="photo-wall-layout page-fade-in mx-auto max-w-[1500px] px-4 py-8 sm:px-8 xl:px-[80px]">
         <div className="photo-wall-hero">
-          <div className="photo-wall-heading">
+          <div className={`photo-wall-heading ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: "0ms" } : undefined}>
             <div className="photo-wall-title">
               <input
                 ref={fileInputRef}
@@ -339,13 +362,26 @@ export default function PhotosPage() {
           </div>
         </div>
 
-        {albums.length === 0 && (
-          <div className="photo-empty-state">
+        {!fetchComplete && (
+          <div className="photo-skeleton-grid">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="photo-skeleton-card">
+                <div className="photo-skeleton-stack">
+                  <div className="photo-skeleton-badge" />
+                </div>
+                <div className="photo-skeleton-title" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {fetchComplete && albums.length === 0 && (
+          <div className={`photo-empty-state ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: "80ms" } : undefined}>
             暂无相册。点击上传相册后，会以堆叠卡片形式展示在这里。
           </div>
         )}
 
-        <div className="photo-album-grid">
+        {fetchComplete && <div className="photo-album-grid">
           {albums.map((album, index) => {
             const cover = album.photos[0];
             const isStackedAlbum = album.photos.length > 1;
@@ -355,7 +391,8 @@ export default function PhotosPage() {
             return (
             <article
               key={album.id}
-              className={`photo-album-card ${isStackedAlbum ? "photo-album-card-stacked" : "photo-album-card-single"}`}
+              className={`photo-album-card ${isStackedAlbum ? "photo-album-card-stacked" : "photo-album-card-single"} ${dataReady ? "card-fly-in" : "card-init-hidden"}`}
+              style={dataReady ? { animationDelay: `${index * 90}ms` } : undefined}
               onClick={() => {
                 setActivePhotoIndex(null);
                 setActiveAlbumId(album.id);
@@ -365,26 +402,14 @@ export default function PhotosPage() {
               <div className="photo-stack-stage" title="右键删除相册">
                 {isStackedAlbum && (
                   <>
-                    <span
-                      aria-hidden="true"
-                      className="photo-stack-copy photo-stack-copy-one"
-                      style={{ backgroundImage: `url("${resolveImageUrl(second.image_url)}")` }}
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="photo-stack-copy photo-stack-copy-two"
-                      style={{ backgroundImage: `url("${resolveImageUrl(third.image_url)}")` }}
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="photo-stack-copy photo-stack-copy-three"
-                      style={{ backgroundImage: `url("${resolveImageUrl(fourth.image_url)}")` }}
-                    />
+                    <LoadableImage src={resolveImageUrl(second.image_url)} alt="" className="photo-stack-copy photo-stack-copy-one" />
+                    <LoadableImage src={resolveImageUrl(third.image_url)} alt="" className="photo-stack-copy photo-stack-copy-two" />
+                    <LoadableImage src={resolveImageUrl(fourth.image_url)} alt="" className="photo-stack-copy photo-stack-copy-three" />
                   </>
                 )}
-                <div
+                <LoadableImage
+                  src={resolveImageUrl(cover.image_url)} alt={cover.title}
                   className="photo-stack-image"
-                  style={{ backgroundImage: `url("${resolveImageUrl(cover.image_url)}")` }}
                 />
                 <span className="photo-count-badge">{album.photos.length} 张</span>
               </div>
@@ -395,7 +420,7 @@ export default function PhotosPage() {
             </article>
             );
           })}
-        </div>
+        </div>}
       </section>
 
       {activeAlbum && (
@@ -435,11 +460,7 @@ export default function PhotosPage() {
                   } as React.CSSProperties}
                   onClick={() => setActivePhotoIndex(index)}
                 >
-                  <div
-                    aria-label={photo.title}
-                    role="img"
-                    style={{ backgroundImage: `url("${resolveImageUrl(photo.image_url)}")` }}
-                  />
+                  <LoadableImage src={resolveImageUrl(photo.image_url)} alt={photo.title} />
                   <figcaption>{index + 1}</figcaption>
                 </figure>
               ))}
@@ -469,11 +490,7 @@ export default function PhotosPage() {
             ‹
           </button>
           <div className="photo-lightbox-frame" onClick={(event) => event.stopPropagation()}>
-            <div
-              aria-label={activePhoto.title}
-              role="img"
-              style={{ backgroundImage: `url("${resolveImageUrl(activePhoto.image_url)}")` }}
-            />
+            <LoadableImage src={resolveImageUrl(activePhoto.image_url)} alt={activePhoto.title} />
             <p>{activePhotoIndex + 1} / {activeAlbum.photos.length}</p>
           </div>
           <button

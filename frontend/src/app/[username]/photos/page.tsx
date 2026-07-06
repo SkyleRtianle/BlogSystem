@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TouchEvent } from "react";
 import PublicHeader from "@/components/PublicHeader";
+import LoadableImage from "@/components/LoadableImage";
 import { useAppSettings } from "@/lib/useAppSettings";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
@@ -65,6 +66,8 @@ export default function PublicPhotosPage() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [activeAlbumId, setActiveAlbumId] = useState<string | null>(null);
   const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
+  const [dataReady, setDataReady] = useState(false);
+  const [fetchComplete, setFetchComplete] = useState(false);
   const lightboxTouchStartXRef = useRef<number | null>(null);
 
   const albums = useMemo(() => buildAlbums(photos), [photos]);
@@ -81,6 +84,8 @@ export default function PublicPhotosPage() {
     } catch (error) {
       setPhotos([]);
       console.error(error);
+    } finally {
+      setFetchComplete(true);
     }
   }, [username]);
 
@@ -88,6 +93,24 @@ export default function PublicPhotosPage() {
     const timer = window.setTimeout(() => { void fetchPhotos(); }, 0);
     return () => window.clearTimeout(timer);
   }, [fetchPhotos]);
+
+  useEffect(() => {
+    if (fetchComplete) {
+      const raf1 = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setDataReady(true);
+        });
+      });
+      return () => cancelAnimationFrame(raf1);
+    }
+  }, [fetchComplete]);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      document.querySelector(".page-fade-in")?.classList.add("page-fade-in-ready");
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   const movePhoto = (direction: -1 | 1) => {
     if (activeAlbumPhotoCount === 0) return;
@@ -137,12 +160,25 @@ export default function PublicPhotosPage() {
       {showWallpaper && !isNight && <div className="home-global-wallpaper" style={{ filter: "blur(12px) saturate(0.82)" }} />}
       <PublicHeader active="照片墙" username={username} isNight={isNight} showWallpaper={showWallpaper} glassAlpha={glassAlpha} onGlassAlphaChange={setGlassAlpha} onToggleNight={toggleNight} onToggleWallpaper={toggleWallpaper} />
 
-      <section className="photo-wall-layout mx-auto max-w-[1500px] px-4 py-8 sm:px-8 xl:px-[80px] flex flex-col justify-center min-h-[calc(100vh-120px)]">
-        {albums.length === 0 && (
-          <div className="photo-empty-state">暂无相册。</div>
+      <section className="photo-wall-layout page-fade-in mx-auto max-w-[1500px] px-4 py-8 sm:px-8 xl:px-[80px] flex flex-col justify-center min-h-[calc(100vh-120px)]">
+        {!fetchComplete && (
+          <div className="photo-skeleton-grid">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="photo-skeleton-card">
+                <div className="photo-skeleton-stack">
+                  <div className="photo-skeleton-badge" />
+                </div>
+                <div className="photo-skeleton-title" />
+              </div>
+            ))}
+          </div>
         )}
 
-        <div className="photo-album-grid">
+        {fetchComplete && albums.length === 0 && (
+          <div className={`photo-empty-state ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: "80ms" } : undefined}>暂无相册。</div>
+        )}
+
+        {fetchComplete && <div className="photo-album-grid">
           {albums.map((album, index) => {
             const cover = album.photos[0];
             const isStackedAlbum = album.photos.length > 1;
@@ -152,7 +188,8 @@ export default function PublicPhotosPage() {
             return (
               <article
                 key={album.id}
-                className={`photo-album-card ${isStackedAlbum ? "photo-album-card-stacked" : "photo-album-card-single"}`}
+                className={`photo-album-card ${isStackedAlbum ? "photo-album-card-stacked" : "photo-album-card-single"} ${dataReady ? "card-fly-in" : "card-init-hidden"}`}
+                style={dataReady ? { animationDelay: `${index * 90}ms` } : undefined}
                 onClick={() => {
                   setActivePhotoIndex(null);
                   setActiveAlbumId(album.id);
@@ -161,16 +198,12 @@ export default function PublicPhotosPage() {
                 <div className="photo-stack-stage">
                   {isStackedAlbum && (
                     <>
-                      <span aria-hidden="true" className="photo-stack-copy photo-stack-copy-one"
-                        style={{ backgroundImage: `url("${resolveImageUrl(second.image_url)}")` }} />
-                      <span aria-hidden="true" className="photo-stack-copy photo-stack-copy-two"
-                        style={{ backgroundImage: `url("${resolveImageUrl(third.image_url)}")` }} />
-                      <span aria-hidden="true" className="photo-stack-copy photo-stack-copy-three"
-                        style={{ backgroundImage: `url("${resolveImageUrl(fourth.image_url)}")` }} />
+                      <LoadableImage src={resolveImageUrl(second.image_url)} alt="" className="photo-stack-copy photo-stack-copy-one" />
+                      <LoadableImage src={resolveImageUrl(third.image_url)} alt="" className="photo-stack-copy photo-stack-copy-two" />
+                      <LoadableImage src={resolveImageUrl(fourth.image_url)} alt="" className="photo-stack-copy photo-stack-copy-three" />
                     </>
                   )}
-                  <div className="photo-stack-image"
-                    style={{ backgroundImage: `url("${resolveImageUrl(cover.image_url)}")` }} />
+                  <LoadableImage src={resolveImageUrl(cover.image_url)} alt={cover.title} className="photo-stack-image" />
                   <span className="photo-count-badge">{album.photos.length} 张</span>
                 </div>
                 <div className="photo-card-meta">
@@ -180,9 +213,9 @@ export default function PublicPhotosPage() {
               </article>
             );
           })}
-        </div>
+        </div>}
 
-        <div className="mt-[100px] flex justify-center">
+        <div className={`mt-[100px] flex justify-center ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: "400ms" } : undefined}>
           <h2 className="photo-wall-glass-title">{username} 的照片墙</h2>
         </div>
       </section>
@@ -203,8 +236,7 @@ export default function PublicPhotosPage() {
                 <figure key={photo.id} className="photo-polaroid-card"
                   style={{ "--photo-rotate": `${((index % 5) - 2) * 2.2}deg`, animationDelay: `${index * 90}ms` } as React.CSSProperties}
                   onClick={() => setActivePhotoIndex(index)}>
-                  <div aria-label={photo.title} role="img"
-                    style={{ backgroundImage: `url("${resolveImageUrl(photo.image_url)}")` }} />
+                  <LoadableImage src={resolveImageUrl(photo.image_url)} alt={photo.title} className="photo-polaroid-img" />
                   <figcaption>{index + 1}</figcaption>
                 </figure>
               ))}
@@ -219,8 +251,7 @@ export default function PublicPhotosPage() {
           <button aria-label="上一张" className="photo-lightbox-nav photo-lightbox-prev" type="button"
             onClick={(e) => { e.stopPropagation(); showPreviousPhoto(); }}>‹</button>
           <div className="photo-lightbox-frame" onClick={(e) => e.stopPropagation()}>
-            <div aria-label={activePhoto.title} role="img"
-              style={{ backgroundImage: `url("${resolveImageUrl(activePhoto.image_url)}")` }} />
+            <LoadableImage src={resolveImageUrl(activePhoto.image_url)} alt={activePhoto.title} className="photo-lightbox-img" />
             <p>{activePhotoIndex + 1} / {activeAlbum.photos.length}</p>
           </div>
           <button aria-label="下一张" className="photo-lightbox-nav photo-lightbox-next" type="button"
