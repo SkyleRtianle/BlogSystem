@@ -824,7 +824,7 @@ function CalendarCard() {
           </button>
         ))}
       </div>
-      <div className="calendar-selected-note">{selectedLabel}</div>
+      <div className="calendar-selected-note" suppressHydrationWarning>{selectedLabel}</div>
     </div>
   );
 }

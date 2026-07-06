@@ -104,8 +104,26 @@ async def register(payload: UserCreate, session: Session = Depends(get_session))
     if existing is not None:
         raise HTTPException(status_code=409, detail="Email already registered")
 
+    username = payload.username.strip() if payload.username else ""
+    if not username:
+        import re
+        username = re.sub(r"[^a-z0-9_-]", "", email.split("@", 1)[0].lower())[:27] or "user"
+    else:
+        import re
+        username = re.sub(r"[^a-z0-9_-]", "", username.lower())[:30]
+        if not username or len(username) < 3:
+            username = re.sub(r"[^a-z0-9_-]", "", email.split("@", 1)[0].lower())[:27] or "user"
+
+    # Resolve username collision
+    base = username
+    n = 1
+    while session.exec(select(User).where(User.username == username)).first() is not None:
+        n += 1
+        username = f"{base}{n}" if len(f"{base}{n}") <= 30 else f"{base[:30-len(str(n))]}{n}"
+
     user = User(
         email=email,
+        username=username,
         nickname=payload.nickname.strip() or email.split("@", 1)[0],
         password_hash=_hash_password(payload.password),
         session_token=_new_session_token(),

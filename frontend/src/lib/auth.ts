@@ -4,6 +4,7 @@ export type AuthUser = {
   id: number;
   email: string;
   nickname: string;
+  username: string;
   created_at: string;
 };
 
@@ -89,4 +90,9 @@ export function ensureAuthorized(response: Response) {
     redirectToLogin();
     throw new Error("登录已过期，请重新登录");
   }
+}
+
+export function isOwnBlog(username: string): boolean {
+  const user = getStoredUser();
+  return user?.username === username;
 }

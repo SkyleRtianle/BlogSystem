@@ -1,3 +1,4 @@
+
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
@@ -22,6 +23,7 @@ export default function Home() {
   const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("login");
   const [form, setForm] = useState({
+    username: "",
     nickname: "",
     email: "",
     password: "",
@@ -76,6 +78,7 @@ export default function Home() {
           email: form.email,
           password: form.password,
           nickname: form.nickname,
+          username: form.username,
         }),
       });
 
@@ -137,17 +140,16 @@ export default function Home() {
 
           <form onSubmit={submitAuth} noValidate className="space-y-3">
             {!isLogin && (
-              <label className="block">
-                <span className="mb-1.5 block text-sm text-white/78">昵称</span>
-                <input
-                  type="text"
-                  value={form.nickname}
-                  onChange={(event) => setForm({ ...form, nickname: event.target.value })}
-                  autoComplete="nickname"
-                  className="auth-input"
-                  placeholder="给自己取个名字"
-                />
-              </label>
+              <>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm text-white/78">用户名</span>
+                  <input type="text" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className="auth-input" placeholder="个人页面地址 (可选)" />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm text-white/78">昵称</span>
+                  <input type="text" value={form.nickname} onChange={(e) => setForm({ ...form, nickname: e.target.value })} autoComplete="nickname" className="auth-input" placeholder="给自己取个名字" />
+                </label>
+              </>
             )}
 
             <label className="block">

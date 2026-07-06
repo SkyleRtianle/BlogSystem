@@ -6,11 +6,13 @@ from sqlmodel import Field, SQLModel
 class UserBase(SQLModel):
     email: str = Field(min_length=3, max_length=160)
     nickname: str = Field(default="", max_length=80)
+    username: str = Field(default="", min_length=3, max_length=30)
 
 
 class User(UserBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
     email: str = Field(min_length=3, max_length=160, unique=True, index=True)
+    username: str = Field(default="", min_length=3, max_length=30, unique=True, index=True)
     password_hash: str
     session_token: str = Field(default="", unique=True, index=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

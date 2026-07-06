@@ -11,6 +11,7 @@ import {
   useAuthUser,
 } from "@/lib/auth";
 import SiteHeader from "@/components/SiteHeader";
+import CommentSection from "@/components/CommentSection";
 import { useAppSettings } from "@/lib/useAppSettings";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
@@ -72,7 +73,7 @@ export default function ArticleDetailPage() {
       <SiteHeader active="文章" isNight={isNight} showWallpaper={showWallpaper} glassAlpha={glassAlpha} onGlassAlphaChange={setGlassAlpha} onToggleNight={toggleNight} onToggleWallpaper={toggleWallpaper} user={currentUser} onLogout={logout} />
 
       <section
-        className="article-detail-space relative z-10 mx-auto max-w-[980px] px-4 py-8 sm:px-8 xl:px-0"
+        className="article-detail-space relative z-10 mx-auto max-w-[1800px] px-4 py-8 sm:px-8 xl:pl-[200px] xl:pr-[200px]"
         onClick={() => router.back()}
       >
         {!post && (
@@ -82,39 +83,45 @@ export default function ArticleDetailPage() {
         )}
 
         {post && (
-          <article className="home-card overflow-hidden relative" onClick={(event) => event.stopPropagation()}>
-            <button
-              type="button"
-              className="article-detail-back"
-              onClick={(event) => {
-                event.stopPropagation();
-                router.back();
-              }}
-              aria-label="返回"
-            >
-              ← 返回
-            </button>
-            <div
-              className="article-detail-cover"
-              style={post.cover_url ? { backgroundImage: `linear-gradient(135deg, rgb(16 185 129 / 0.18), rgb(14 165 233 / 0.2)), url("${post.cover_url}")` } : undefined}
-            />
-            <div className="p-6 sm:p-8">
-              <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-slate-700">
-                <span className="rounded-lg bg-emerald-50 px-3 py-1 text-emerald-600">{post.category}</span>
-                <span>{formatDate(post.created_at)}</span>
+          <div className="article-detail-layout">
+            <article className="home-card overflow-hidden relative" onClick={(event) => event.stopPropagation()}>
+              <button
+                type="button"
+                className="article-detail-back"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  router.back();
+                }}
+                aria-label="返回"
+              >
+                ← 返回
+              </button>
+              <div
+                className="article-detail-cover"
+                style={post.cover_url ? { backgroundImage: `linear-gradient(135deg, rgb(16 185 129 / 0.18), rgb(14 165 233 / 0.2)), url("${post.cover_url}")` } : undefined}
+              />
+              <div className="p-6 sm:p-8">
+                <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-slate-700">
+                  <span className="rounded-lg bg-emerald-50 px-3 py-1 text-emerald-600">{post.category}</span>
+                  <span>{formatDate(post.created_at)}</span>
+                </div>
+                <h1 className="mt-5 text-3xl font-black leading-tight sm:text-5xl">{post.title}</h1>
+                <p className="mt-5 text-base leading-8 text-slate-700">{post.summary}</p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {post.tags.map((tag) => (
+                    <span key={tag} className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+                <MarkdownContent content={post.content} />
               </div>
-              <h1 className="mt-5 text-3xl font-black leading-tight sm:text-5xl">{post.title}</h1>
-              <p className="mt-5 text-base leading-8 text-slate-700">{post.summary}</p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                {post.tags.map((tag) => (
-                  <span key={tag} className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-              <MarkdownContent content={post.content} />
+            </article>
+
+            <div onClick={(event) => event.stopPropagation()}>
+              <CommentSection postId={post.id} isOwner={true} />
             </div>
-          </article>
+          </div>
         )}
       </section>
     </main>

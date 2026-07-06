@@ -78,3 +78,33 @@ class PhotoRead(PhotoBase):
 class PhotoList(SQLModel):
     photos: list[PhotoRead]
     total: int
+
+
+class CommentBase(SQLModel):
+    author: str = Field(min_length=1, max_length=60)
+    content: str = Field(min_length=1, max_length=1000)
+
+
+class Comment(CommentBase, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    post_id: int = Field(foreign_key="post.id", index=True)
+    owner_id: int | None = Field(default=None, foreign_key="user.id", index=True)
+    parent_id: int | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class CommentCreate(CommentBase):
+    parent_id: int | None = None
+
+
+class CommentRead(CommentBase):
+    id: int
+    post_id: int
+    parent_id: int | None = None
+    created_at: datetime
+    replies: list["CommentRead"] | None = None
+
+
+class CommentList(SQLModel):
+    comments: list[CommentRead]
+    total: int

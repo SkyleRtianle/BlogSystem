@@ -9,7 +9,6 @@ const navItems = [
   { label: "文章", href: "/articles" },
   { label: "照片墙", href: "/photos" },
   { label: "友链", href: "/links" },
-  { label: "留言", href: "/messages" },
 ];
 
 let lastNavIndex: number | null = null;
@@ -50,12 +49,22 @@ export default function SiteHeader({
   return (
     <header className="sticky top-0 z-40 mx-auto max-w-[1720px] px-4 pt-3 sm:px-6">
       <nav className="home-nav flex min-h-16 items-center justify-between gap-4 px-4 sm:px-6">
-        <Link href="/home" className="flex min-w-0 items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-100 text-lg font-bold text-emerald-600">
-            S
-          </span>
-          <span className="truncate text-lg font-bold">Skyler Blog</span>
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/home" className="flex min-w-0 items-center gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-100 text-lg font-bold text-emerald-600">
+              S
+            </span>
+            <span className="truncate text-lg font-bold">Skyler Blog</span>
+          </Link>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="site-logout-capsule"
+            aria-label="退出登录"
+          >
+            退出
+          </button>
+        </div>
 
         <div
           className="nav-slider-group hidden text-sm font-semibold lg:flex"
@@ -125,13 +134,6 @@ export default function SiteHeader({
             />
             <span className="glass-control-value">{Math.round(glassAlpha * 100)}%</span>
           </div>
-          <button
-            type="button"
-            onClick={onLogout}
-            className="rounded-xl bg-slate-100/70 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:text-emerald-500"
-          >
-            退出
-          </button>
         </div>
       </nav>
     </header>

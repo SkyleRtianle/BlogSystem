@@ -348,13 +348,14 @@ export default function PhotosPage() {
         <div className="photo-album-grid">
           {albums.map((album, index) => {
             const cover = album.photos[0];
+            const isStackedAlbum = album.photos.length > 1;
             const second = album.photos[1] ?? cover;
             const third = album.photos[2] ?? second;
             const fourth = album.photos[3] ?? third;
             return (
             <article
               key={album.id}
-              className="photo-album-card"
+              className={`photo-album-card ${isStackedAlbum ? "photo-album-card-stacked" : "photo-album-card-single"}`}
               onClick={() => {
                 setActivePhotoIndex(null);
                 setActiveAlbumId(album.id);
@@ -362,21 +363,25 @@ export default function PhotosPage() {
               onContextMenu={(event) => openContextMenu(event, album.id)}
             >
               <div className="photo-stack-stage" title="右键删除相册">
-                <span
-                  aria-hidden="true"
-                  className="photo-stack-copy photo-stack-copy-one"
-                  style={{ backgroundImage: `url("${resolveImageUrl(second.image_url)}")` }}
-                />
-                <span
-                  aria-hidden="true"
-                  className="photo-stack-copy photo-stack-copy-two"
-                  style={{ backgroundImage: `url("${resolveImageUrl(third.image_url)}")` }}
-                />
-                <span
-                  aria-hidden="true"
-                  className="photo-stack-copy photo-stack-copy-three"
-                  style={{ backgroundImage: `url("${resolveImageUrl(fourth.image_url)}")` }}
-                />
+                {isStackedAlbum && (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className="photo-stack-copy photo-stack-copy-one"
+                      style={{ backgroundImage: `url("${resolveImageUrl(second.image_url)}")` }}
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="photo-stack-copy photo-stack-copy-two"
+                      style={{ backgroundImage: `url("${resolveImageUrl(third.image_url)}")` }}
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="photo-stack-copy photo-stack-copy-three"
+                      style={{ backgroundImage: `url("${resolveImageUrl(fourth.image_url)}")` }}
+                    />
+                  </>
+                )}
                 <div
                   className="photo-stack-image"
                   style={{ backgroundImage: `url("${resolveImageUrl(cover.image_url)}")` }}

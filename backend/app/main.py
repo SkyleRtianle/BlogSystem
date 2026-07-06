@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.public_routes import router as public_router
 from app.api.routes import router as api_router
 from app.core.config import settings
 from app.db.session import init_db
@@ -27,6 +28,7 @@ def create_app() -> FastAPI:
     )
 
     application.include_router(api_router, prefix=settings.api_prefix)
+    application.include_router(public_router, prefix=settings.api_prefix)
 
     @application.get("/")
     async def root() -> dict[str, str]:
