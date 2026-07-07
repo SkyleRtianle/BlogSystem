@@ -24,6 +24,9 @@ next-env.d.ts
 .idea/
 .vscode/
 
+# Uploads
+backend/uploads/
+
 # Logs
 *.log
 .blogsystem-run/

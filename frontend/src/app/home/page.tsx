@@ -29,6 +29,14 @@ type BlogPost = {
   updated_at: string;
 };
 
+type Photo = {
+  id: number;
+  title: string;
+  image_url: string;
+  description: string;
+  created_at: string;
+};
+
 type ProfileSettings = {
   avatarUrl: string;
   displayName: string;
@@ -66,6 +74,8 @@ export default function HomePage() {
   const [totalPosts, setTotalPosts] = useState(0);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [postsError, setPostsError] = useState("");
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
   const [dataReady, setDataReady] = useState(false);
   const currentUser = useAuthUser();
   const router = useRouter();
@@ -111,12 +121,36 @@ export default function HomePage() {
     }
   }, []);
 
+  const fetchPhotos = useCallback(async () => {
+    const token = requireAuthToken();
+    if (!token) {
+      setIsLoadingPhotos(false);
+      return;
+    }
+
+    setIsLoadingPhotos(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/photos`, {
+        headers: authHeaders(token),
+      });
+      ensureAuthorized(response);
+      if (!response.ok) throw new Error("照片列表加载失败");
+      const data: { photos: Photo[]; total: number } = await response.json();
+      setPhotos(data.photos);
+    } catch {
+      setPhotos([]);
+    } finally {
+      setIsLoadingPhotos(false);
+    }
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void fetchPosts();
+      void fetchPhotos();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [fetchPosts]);
+  }, [fetchPhotos, fetchPosts]);
 
   useEffect(() => {
     if (!isLoadingPosts) {
@@ -263,6 +297,15 @@ export default function HomePage() {
     ];
   }, [categories.length, posts, totalPosts]);
 
+  const showcaseStats = useMemo(() => {
+    const tags = new Set(posts.flatMap((post) => post.tags));
+    return [
+      ["文章", String(totalPosts)],
+      ["分类", String(categories.length)],
+      ["标签", String(tags.size)],
+    ];
+  }, [categories.length, posts, totalPosts]);
+
   const shellClass = useMemo(() => {
     const base = "home-shell min-h-screen";
     if (isNight) return `${base} home-night bg-black text-slate-100`;
@@ -304,24 +347,27 @@ export default function HomePage() {
         onLogout={logout}
       />
 
-      <section
-        className="home-content-panel page-fade-in relative z-10 px-[80px] pb-16 mt-[380px] xl:mt-0 pt-8"
-      >
-        <div className="home-dashboard-grid mx-auto grid max-w-[1700px] gap-5 xl:grid-cols-[1fr_3fr_1fr]">
-          <aside className="home-static-column space-y-5 xl:self-start">
-            <ProfileCard user={currentUser} settings={profileSettings} onEdit={openProfileEditor} index={0} />
-            <NoticeCard notice={profileSettings.notice} index={1} />
-          </aside>
-
-          <section data-home-scroll-column className="home-scroll-column">
-            <LatestPosts posts={posts} isLoading={isLoadingPosts} error={postsError} categories={categories} dataReady={dataReady} />
-          </section>
-
-          <aside className="home-static-column space-y-5 xl:self-start">
-            <CalendarCard index={2} dataReady={dataReady} />
-            <StatsCard stats={homeStats} index={3} dataReady={dataReady} />
-          </aside>
+      <section className="home-showcase page-fade-in relative z-10 mx-auto w-full max-w-[1320px] px-4 pb-16 pt-8 sm:px-6 lg:px-10">
+        <div className="showcase-search-spacer" aria-hidden="true" />
+        <div className="home-showcase-hero">
+          <ShowcaseProfileCard
+            displayName={profileSettings.displayName || currentUser?.nickname || currentUser?.email?.split("@", 1)[0] || "Skyler"}
+            intro={profileSettings.intro || DEFAULT_PROFILE_SETTINGS.intro}
+            avatarUrl={profileSettings.avatarUrl}
+            initial={(profileSettings.displayName || currentUser?.nickname || "S").slice(0, 1).toUpperCase()}
+            stats={showcaseStats}
+            links={[
+              { label: "Github", icon: "github", href: profileSettings.githubUrl },
+              { label: "邮箱", icon: "mail", href: profileSettings.email ? `mailto:${profileSettings.email}` : currentUser?.email ? `mailto:${currentUser.email}` : "" },
+              { label: "QQ", icon: "qq", href: profileSettings.qqUrl },
+            ]}
+            onEdit={openProfileEditor}
+            dataReady={dataReady}
+          />
+          <ShowcaseMusicCard dataReady={dataReady} />
         </div>
+        <ShowcaseNoticeBar notice={profileSettings.notice || DEFAULT_NOTICE} dataReady={dataReady} />
+        <RecentPostsCarousel posts={posts} photos={photos} isLoading={isLoadingPosts} isLoadingPhotos={isLoadingPhotos} error={postsError} dataReady={dataReady} hrefPrefix="" />
       </section>
 
       <footer className="relative z-10 mt-8 pb-6 text-center text-sm text-slate-500 xl:hidden">
@@ -446,6 +492,280 @@ function LatestPosts({
       )}
     </section>
   );
+}
+
+function ShowcaseProfileCard({
+  displayName,
+  intro,
+  avatarUrl,
+  initial,
+  stats,
+  links,
+  onEdit,
+  dataReady,
+}: {
+  displayName: string;
+  intro: string;
+  avatarUrl: string;
+  initial: string;
+  stats: string[][];
+  links: Array<{ label: string; icon: "github" | "mail" | "qq"; href: string }>;
+  onEdit?: () => void;
+  dataReady: boolean;
+}) {
+  return (
+    <section
+      className={`showcase-profile-card home-card ${dataReady ? "card-fly-in" : "card-init-hidden"}`}
+      role={onEdit ? "button" : undefined}
+      tabIndex={onEdit ? 0 : undefined}
+      onClick={onEdit}
+      onKeyDown={(event) => {
+        if (!onEdit) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onEdit();
+        }
+      }}
+    >
+      <div className="showcase-profile-main">
+        <div className="showcase-avatar">
+          {avatarUrl ? <span style={{ backgroundImage: `url("${avatarUrl}")` }} /> : <strong>{initial}</strong>}
+        </div>
+        <div>
+          <h1>{displayName}</h1>
+          <p>{intro}</p>
+        </div>
+      </div>
+      <div className="showcase-profile-bottom">
+        <div className="showcase-stats">
+          {stats.map(([label, value]) => (
+            <span key={label}>
+              <strong>{value}</strong>
+              <small>{label}</small>
+            </span>
+          ))}
+        </div>
+        <div className="showcase-contact-row">
+          {links.map((item) => (
+            item.href ? (
+              <a
+                key={item.label}
+                href={item.href}
+                target={item.href.startsWith("http") ? "_blank" : undefined}
+                rel={item.href.startsWith("http") ? "noreferrer" : undefined}
+                aria-label={item.label}
+                title={item.label}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <ContactIcon name={item.icon} />
+              </a>
+            ) : (
+              <span key={item.label} aria-label={`${item.label} 未设置`} title={`${item.label} 未设置`}>
+                <ContactIcon name={item.icon} />
+              </span>
+            )
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ShowcaseMusicCard({ dataReady }: { dataReady: boolean }) {
+  return (
+    <section className={`showcase-music-card home-card ${dataReady ? "card-fly-in" : "card-init-hidden"}`}>
+      <div className="showcase-music-disc">
+        <span />
+      </div>
+      <div className="showcase-music-copy">
+        <small>Cloud Music</small>
+        <strong>雨爱</strong>
+        <span>杨丞琳</span>
+      </div>
+      <div className="showcase-music-progress">
+        <span>00:00</span>
+        <i><b /></i>
+        <span>04:20</span>
+      </div>
+      <div className="showcase-music-controls" aria-hidden="true">
+        <span>‹</span>
+        <strong>▶</strong>
+        <span>›</span>
+      </div>
+    </section>
+  );
+}
+
+function ShowcaseNoticeBar({ notice, dataReady }: { notice: string; dataReady: boolean }) {
+  const signature = notice || "欢迎来到我的博客！";
+  return (
+    <div className={`showcase-notice-bar ${dataReady ? "card-fly-in" : "card-init-hidden"}`}>
+      <span>······</span>
+      <strong><TypewriterText text={signature} /></strong>
+      <span aria-hidden="true">♫</span>
+    </div>
+  );
+}
+
+function TypewriterText({ text }: { text: string }) {
+  const characters = useMemo(() => Array.from(text || "欢迎来到我的博客！"), [text]);
+  const [count, setCount] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    const atEnd = count >= characters.length;
+    const atStart = count <= 0;
+    const delay = atEnd && !isDeleting ? 1100 : atStart && isDeleting ? 420 : isDeleting ? 36 : 82;
+
+    const timer = window.setTimeout(() => {
+      if (!isDeleting && atEnd) {
+        setIsDeleting(true);
+        return;
+      }
+      if (isDeleting && atStart) {
+        setIsDeleting(false);
+        return;
+      }
+      setCount((current) => current + (isDeleting ? -1 : 1));
+    }, delay);
+
+    return () => window.clearTimeout(timer);
+  }, [characters.length, count, isDeleting]);
+
+  useEffect(() => {
+    setCount(0);
+    setIsDeleting(false);
+  }, [text]);
+
+  return (
+    <span className="showcase-typewriter">
+      {characters.slice(0, count).join("")}
+      <i aria-hidden="true" />
+    </span>
+  );
+}
+
+function RecentPostsCarousel({
+  posts,
+  photos,
+  isLoading,
+  isLoadingPhotos,
+  error,
+  dataReady,
+  hrefPrefix,
+}: {
+  posts: BlogPost[];
+  photos: Photo[];
+  isLoading: boolean;
+  isLoadingPhotos: boolean;
+  error: string;
+  dataReady: boolean;
+  hrefPrefix: string;
+}) {
+  const recentPosts = posts.slice(0, 4);
+  const recentPhotos = photos.slice(0, 4);
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const [postOffset, setPostOffset] = useState(0);
+  const activePhoto = recentPhotos.length > 0 ? recentPhotos[photoIndex % recentPhotos.length] : null;
+  const visiblePosts = recentPosts.length > 0
+    ? Array.from({ length: Math.min(4, recentPosts.length) }, (_, index) => recentPosts[(postOffset + index) % recentPosts.length])
+    : [];
+
+  useEffect(() => {
+    if (recentPhotos.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setPhotoIndex((current) => (current + 1) % recentPhotos.length);
+    }, 4200);
+    return () => window.clearInterval(timer);
+  }, [recentPhotos.length]);
+
+  useEffect(() => {
+    if (recentPosts.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setPostOffset((current) => (current + 1) % recentPosts.length);
+    }, 5200);
+    return () => window.clearInterval(timer);
+  }, [recentPosts.length]);
+
+  return (
+    <section className={`showcase-post-carousel showcase-media-refresh ${dataReady ? "card-fly-in" : "card-init-hidden"}`} aria-label="最近内容轮播">
+      <div className="showcase-carousel-head">
+        <h2>最近动态</h2>
+        <Link href={`${hrefPrefix}/articles`} className="home-pill-button">查看全部</Link>
+      </div>
+      <div className="showcase-media-grid">
+        <div className="showcase-photo-refresh-panel">
+          <div className="showcase-panel-title">
+            <strong>相册照片</strong>
+            <Link href={`${hrefPrefix}/photos`}>刷新中</Link>
+          </div>
+          {isLoadingPhotos && <div className="showcase-photo-skeleton" />}
+          {!isLoadingPhotos && recentPhotos.length === 0 && <div className="showcase-empty-state home-card">暂无照片。</div>}
+          {!isLoadingPhotos && activePhoto && (
+            <Link
+              key={activePhoto.id}
+              href={`${hrefPrefix}/photos`}
+              className="showcase-photo-feature"
+              style={{ backgroundImage: buildPhotoCover(activePhoto) }}
+            >
+              <span>{activePhoto.title || "相册照片"}</span>
+            </Link>
+          )}
+        </div>
+
+        <div className="showcase-article-refresh-panel">
+          {isLoading && (
+            <div className="showcase-carousel-grid">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="showcase-post-skeleton" />
+              ))}
+            </div>
+          )}
+          {!isLoading && error && <div className="home-card showcase-empty-state">{error}。请确认后端服务正在运行。</div>}
+          {!isLoading && !error && posts.length === 0 && <div className="home-card showcase-empty-state">还没有文章。进入文章页面后，可以发布第一篇 Markdown 博客。</div>}
+          {!isLoading && !error && visiblePosts.length > 0 && (
+            <div className="showcase-article-board" key={postOffset}>
+              {visiblePosts.map((post, index) => (
+                <Link
+                  key={`${post.id}-${index}`}
+                  href={`${hrefPrefix}/articles/${post.id}`}
+                  className={`showcase-board-post ${index === 0 ? "showcase-board-post-main" : ""}`}
+                >
+                  <article style={{ backgroundImage: buildPostCover(post, index) }}>
+                    <div>
+                      <span>{post.category}</span>
+                      <h3>{post.title}</h3>
+                      {index === 0 && <p>{post.summary}</p>}
+                      <small>{formatDate(post.created_at)}</small>
+                    </div>
+                  </article>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function buildPostCover(post: BlogPost, index: number) {
+  if (post.cover_url) {
+    return `linear-gradient(180deg, rgb(15 23 42 / 0.02), rgb(15 23 42 / 0.66)), url("${post.cover_url}")`;
+  }
+  const accents = [
+    "rgba(14,165,233,.34), rgba(16,185,129,.22)",
+    "rgba(236,72,153,.30), rgba(14,165,233,.24)",
+    "rgba(99,102,241,.30), rgba(250,204,21,.22)",
+  ];
+  return `linear-gradient(135deg, ${accents[index % accents.length]}), url('/images/home-background.png')`;
+}
+
+function buildPhotoCover(photo: Photo) {
+  const imageUrl = photo.image_url.startsWith("data:")
+    ? photo.image_url
+    : `${API_BASE_URL}/photos/file/${photo.image_url}`;
+  return `linear-gradient(180deg, rgb(15 23 42 / 0), rgb(15 23 42 / 0.42)), url("${imageUrl}")`;
 }
 
 function ProfileCard({
