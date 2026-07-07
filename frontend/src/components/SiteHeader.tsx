@@ -8,6 +8,7 @@ const navItems = [
   { label: "主页", href: "/home" },
   { label: "文章", href: "/articles" },
   { label: "照片墙", href: "/photos" },
+  { label: "音乐", href: "/music" },
   { label: "友链", href: "/links" },
 ];
 

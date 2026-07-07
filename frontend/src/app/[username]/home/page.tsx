@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useMemo, useCallback, useEffect, useState } from "react";
 import PublicHeader from "@/components/PublicHeader";
+import MusicPlayer from "@/components/MusicPlayer";
 import { useAppSettings } from "@/lib/useAppSettings";
+import { useAudioState } from "@/lib/audioState";
 import { useParams } from "next/navigation";
 
 type BlogPost = {
@@ -162,7 +164,7 @@ export default function PublicHomePage() {
             stats={showcaseStats}
             dataReady={dataReady}
           />
-          <ShowcaseMusicCard dataReady={dataReady} />
+          <MusicPlayer hrefPrefix={`/${username}`} dataReady={dataReady} />
         </div>
         <ShowcaseNoticeBar notice={DEFAULT_NOTICE} dataReady={dataReady} />
         <RecentPostsCarousel posts={posts} photos={photos} isLoading={isLoadingPosts} isLoadingPhotos={isLoadingPhotos} error={postsError} dataReady={dataReady} hrefPrefix={`/${username}`} />
@@ -302,43 +304,29 @@ function ShowcaseProfileCard({
   );
 }
 
-function ShowcaseMusicCard({ dataReady }: { dataReady: boolean }) {
-  return (
-    <section className={`showcase-music-card home-card ${dataReady ? "card-fly-in" : "card-init-hidden"}`}>
-      <div className="showcase-music-disc">
-        <span />
-      </div>
-      <div className="showcase-music-copy">
-        <small>Cloud Music</small>
-        <strong>雨爱</strong>
-        <span>杨丞琳</span>
-      </div>
-      <div className="showcase-music-progress">
-        <span>00:00</span>
-        <i><b /></i>
-        <span>04:20</span>
-      </div>
-      <div className="showcase-music-controls" aria-hidden="true">
-        <span>‹</span>
-        <strong>▶</strong>
-        <span>›</span>
-      </div>
-    </section>
-  );
-}
-
 function ShowcaseNoticeBar({ notice, dataReady }: { notice: string; dataReady: boolean }) {
+  const { isPlaying, lyrics, lyricIndex } = useAudioState();
   const signature = notice || "欢迎来到我的博客！";
+  const currentLyric = isPlaying && lyrics && lyricIndex >= 0
+    ? lyrics[lyricIndex]?.text ?? ""
+    : "";
+
   return (
     <div className={`showcase-notice-bar ${dataReady ? "card-fly-in" : "card-init-hidden"}`}>
       <span>······</span>
-      <strong><TypewriterText text={signature} /></strong>
-      <span aria-hidden="true">♫</span>
+      <strong>
+        {currentLyric ? (
+          <TypewriterText text={currentLyric} loop={false} />
+        ) : (
+          <TypewriterText text={signature} />
+        )}
+      </strong>
+      <span className={isPlaying ? "showcase-music-note-pulse" : ""} aria-hidden="true">♫</span>
     </div>
   );
 }
 
-function TypewriterText({ text }: { text: string }) {
+function TypewriterText({ text, loop = true }: { text: string; loop?: boolean }) {
   const characters = useMemo(() => Array.from(text || "欢迎来到我的博客！"), [text]);
   const [count, setCount] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -346,6 +334,9 @@ function TypewriterText({ text }: { text: string }) {
   useEffect(() => {
     const atEnd = count >= characters.length;
     const atStart = count <= 0;
+
+    if (!loop && atEnd) return;
+
     const delay = atEnd && !isDeleting ? 1100 : atStart && isDeleting ? 420 : isDeleting ? 36 : 82;
 
     const timer = window.setTimeout(() => {
@@ -361,7 +352,7 @@ function TypewriterText({ text }: { text: string }) {
     }, delay);
 
     return () => window.clearTimeout(timer);
-  }, [characters.length, count, isDeleting]);
+  }, [characters.length, count, isDeleting, loop]);
 
   useEffect(() => {
     setCount(0);
@@ -396,11 +387,7 @@ function RecentPostsCarousel({
   const recentPosts = posts.slice(0, 4);
   const recentPhotos = photos.slice(0, 4);
   const [photoIndex, setPhotoIndex] = useState(0);
-  const [postOffset, setPostOffset] = useState(0);
   const activePhoto = recentPhotos.length > 0 ? recentPhotos[photoIndex % recentPhotos.length] : null;
-  const visiblePosts = recentPosts.length > 0
-    ? Array.from({ length: Math.min(4, recentPosts.length) }, (_, index) => recentPosts[(postOffset + index) % recentPosts.length])
-    : [];
 
   useEffect(() => {
     if (recentPhotos.length <= 1) return;
@@ -409,14 +396,6 @@ function RecentPostsCarousel({
     }, 4200);
     return () => window.clearInterval(timer);
   }, [recentPhotos.length]);
-
-  useEffect(() => {
-    if (recentPosts.length <= 1) return;
-    const timer = window.setInterval(() => {
-      setPostOffset((current) => (current + 1) % recentPosts.length);
-    }, 5200);
-    return () => window.clearInterval(timer);
-  }, [recentPosts.length]);
 
   return (
     <section className={`showcase-post-carousel showcase-media-refresh ${dataReady ? "card-fly-in" : "card-init-hidden"}`} aria-label="最近内容轮播">
@@ -454,9 +433,9 @@ function RecentPostsCarousel({
           )}
           {!isLoading && error && <div className="home-card showcase-empty-state">{error}。请确认后端服务正在运行。</div>}
           {!isLoading && !error && posts.length === 0 && <div className="home-card showcase-empty-state">还没有文章。</div>}
-          {!isLoading && !error && visiblePosts.length > 0 && (
-            <div className="showcase-article-board" key={postOffset}>
-              {visiblePosts.map((post, index) => (
+          {!isLoading && !error && recentPosts.length > 0 && (
+            <div className="showcase-article-board">
+              {recentPosts.map((post, index) => (
                 <Link
                   key={`${post.id}-${index}`}
                   href={`${hrefPrefix}/articles/${post.id}`}

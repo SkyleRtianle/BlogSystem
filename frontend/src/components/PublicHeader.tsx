@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const navLabels = ["主页", "文章", "照片墙", "友链"];
-const navPaths = ["home", "articles", "photos", "links"];
+const navLabels = ["主页", "文章", "照片墙", "音乐", "友链"];
+const navPaths = ["home", "articles", "photos", "music", "links"];
 
 let lastNavIndex: number | null = null;
 

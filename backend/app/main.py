@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.music_routes import router as music_router
 from app.api.public_routes import router as public_router
 from app.api.routes import router as api_router
 from app.core.config import settings
@@ -28,6 +29,7 @@ def create_app() -> FastAPI:
     )
 
     application.include_router(api_router, prefix=settings.api_prefix)
+    application.include_router(music_router, prefix=settings.api_prefix)
     application.include_router(public_router, prefix=settings.api_prefix)
 
     @application.get("/")
