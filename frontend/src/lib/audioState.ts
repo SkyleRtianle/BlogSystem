@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
 
@@ -12,7 +12,7 @@ export type SongInfo = {
   duration: number;
 };
 
-export type LyricLine = { time: number; text: string };
+export type LyricLine = { time: number; text: string; isHarmony?: boolean };
 
 export type AudioState = {
   currentSong: SongInfo | null;
@@ -32,6 +32,7 @@ type Listener = () => void;
 function parseLRC(raw: string): LyricLine[] {
   const lines: LyricLine[] = [];
   const re = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/g;
+  const harmonyRe = /^(?:[（(]\s*)?(?:和声|合声|伴唱|副歌|chorus|backing\s*vocals?|harmony)(?:\s*[：:）)]|\s+)/i;
   for (const line of raw.split("\n")) {
     re.lastIndex = 0;
     const m = re.exec(line.trim());
@@ -40,7 +41,7 @@ function parseLRC(raw: string): LyricLine[] {
       const secs = parseInt(m[2], 10);
       const ms = parseInt(m[3].padEnd(3, "0"), 10);
       const text = m[4].trim();
-      if (text) lines.push({ time: mins * 60 + secs + ms / 1000, text });
+      if (text) lines.push({ time: mins * 60 + secs + ms / 1000, text, isHarmony: harmonyRe.test(text) });
     }
   }
   return lines;
@@ -49,8 +50,8 @@ function parseLRC(raw: string): LyricLine[] {
 // ── Module-level singleton ──
 
 let _audio: HTMLAudioElement | null = null;
-let _listeners = new Set<Listener>();
-let _state: AudioState = {
+const _listeners = new Set<Listener>();
+const _state: AudioState = {
   currentSong: null,
   playlist: [],
   playlistIndex: -1,
@@ -124,6 +125,29 @@ function persistPlaylist() {
       window.localStorage.setItem("music.current", JSON.stringify(_state.currentSong));
     }
   } catch { /* ignore */ }
+}
+
+function mergeSongDetail(detail: SongInfo | null | undefined) {
+  if (!detail?.album?.picUrl) return;
+  const mergeAlbum = (song: SongInfo): SongInfo => ({
+    ...song,
+    name: song.name || detail.name,
+    artists: song.artists.length > 0 ? song.artists : detail.artists,
+    duration: song.duration || detail.duration,
+    album: {
+      ...song.album,
+      id: song.album.id || detail.album.id,
+      name: song.album.name || detail.album.name,
+      picUrl: song.album.picUrl || detail.album.picUrl,
+    },
+  });
+
+  if (_state.currentSong?.id === detail.id) {
+    _state.currentSong = mergeAlbum(_state.currentSong);
+  }
+  _state.playlist = _state.playlist.map((song) => (
+    song.id === detail.id ? mergeAlbum(song) : song
+  ));
 }
 
 function loadPersisted() {
@@ -201,6 +225,8 @@ function _resolveAudioSource(song: SongInfo) {
         const parsed = parseLRC(raw);
         _state.lyrics = parsed.length > 0 ? parsed : null;
       }
+      mergeSongDetail(urlData.song);
+      persistPlaylist();
       const a = getAudio();
       a.src = urlData.url;
       a.load();
@@ -230,6 +256,8 @@ function _resolveAndPlay(song: SongInfo) {
         const parsed = parseLRC(raw);
         _state.lyrics = parsed.length > 0 ? parsed : null;
       }
+      mergeSongDetail(urlData.song);
+      persistPlaylist();
       const a = getAudio();
       a.src = urlData.url;
       a.load();
@@ -352,17 +380,17 @@ export function useAudioState(): AudioState {
 
 export function useAudioActions() {
   return {
-    playSong: useCallback(playSong, []),
-    togglePlay: useCallback(togglePlay, []),
-    playNext: useCallback(playNext, []),
-    playPrev: useCallback(playPrev, []),
-    playAtIndex: useCallback(playAtIndex, []),
-    addToPlaylist: useCallback(addToPlaylist, []),
-    removeFromPlaylist: useCallback(removeFromPlaylist, []),
-    clearPlaylist: useCallback(clearPlaylist, []),
-    setLoopMode: useCallback(setLoopMode, []),
-    setVolume: useCallback(setVolume, []),
-    seekTo: useCallback(seekTo, []),
-    searchSongs: useCallback(searchSongs, []),
+    playSong,
+    togglePlay,
+    playNext,
+    playPrev,
+    playAtIndex,
+    addToPlaylist,
+    removeFromPlaylist,
+    clearPlaylist,
+    setLoopMode,
+    setVolume,
+    seekTo,
+    searchSongs,
   };
 }

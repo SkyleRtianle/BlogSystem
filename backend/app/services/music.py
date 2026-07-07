@@ -1,3 +1,4 @@
+import json
 from functools import lru_cache
 from typing import Any
 
@@ -26,6 +27,49 @@ def _album_cover(album_id: int) -> str:
         return ""
 
 
+def _pick_cover(album: dict[str, Any] | None) -> str:
+    if not album:
+        return ""
+    return album.get("picUrl") or album.get("blurPicUrl") or ""
+
+
+def _song_details(song_ids: list[int]) -> dict[int, dict[str, Any]]:
+    if not song_ids:
+        return {}
+    try:
+        resp = requests.get(
+            f"{NETEASE_BASE}/api/song/detail",
+            params={"ids": json.dumps(song_ids, separators=(",", ":"))},
+            headers=HEADERS,
+            timeout=15,
+        )
+        resp.raise_for_status()
+        songs = resp.json().get("songs", [])
+        return {song["id"]: song for song in songs if song.get("id") is not None}
+    except Exception:
+        return {}
+
+
+def get_song_detail(song_id: int) -> dict[str, Any] | None:
+    detail = _song_details([song_id]).get(song_id)
+    if not detail:
+        return None
+
+    album = detail.get("album") or detail.get("al") or {}
+    artists = detail.get("artists") or detail.get("ar") or []
+    return {
+        "id": detail["id"],
+        "name": detail.get("name", ""),
+        "artists": [{"name": artist.get("name", "")} for artist in artists],
+        "album": {
+            "id": album.get("id", 0),
+            "name": album.get("name", ""),
+            "picUrl": _pick_cover(album),
+        },
+        "duration": detail.get("duration") or detail.get("dt") or 0,
+    }
+
+
 def search_songs(keyword: str, limit: int = 10, offset: int = 0) -> list[dict[str, Any]]:
     resp = requests.get(
         f"{NETEASE_BASE}/api/search/get",
@@ -36,23 +80,24 @@ def search_songs(keyword: str, limit: int = 10, offset: int = 0) -> list[dict[st
     resp.raise_for_status()
     result = resp.json()
     songs = result.get("result", {}).get("songs", [])
+    details_by_id = _song_details([s["id"] for s in songs if s.get("id") is not None])
 
     enriched: list[dict[str, Any]] = []
     for s in songs:
         album = s.get("album", {})
-        album_id = album.get("id", 0)
-        pic_url = _album_cover(album_id) if album_id else ""
-        if not pic_url:
-            artists = s.get("artists", [])
-            if artists:
-                pic_url = artists[0].get("img1v1Url", "")
+        detail_album = (details_by_id.get(s.get("id"), {}).get("album") or
+                        details_by_id.get(s.get("id"), {}).get("al") or {})
+        album_id = detail_album.get("id") or album.get("id", 0)
+        pic_url = _pick_cover(detail_album) or _pick_cover(album)
+        if not pic_url and album_id:
+            pic_url = _album_cover(album_id)
         enriched.append({
             "id": s["id"],
             "name": s["name"],
             "artists": [{"name": a["name"]} for a in s.get("artists", [])],
             "album": {
                 "id": album_id,
-                "name": album.get("name", ""),
+                "name": detail_album.get("name") or album.get("name", ""),
                 "picUrl": pic_url,
             },
             "duration": s.get("duration", 0),

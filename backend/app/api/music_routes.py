@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 
-from app.services.music import get_lyric, get_song_url, search_songs
+from app.services.music import get_lyric, get_song_detail, get_song_url, search_songs
 
 router = APIRouter()
 
@@ -25,7 +25,7 @@ async def song_url(
         url = get_song_url(id)
         if url is None:
             raise HTTPException(status_code=404, detail="无法获取播放地址")
-        return {"id": id, "url": url}
+        return {"id": id, "url": url, "song": get_song_detail(id)}
     except HTTPException:
         raise
     except Exception as exc:

@@ -732,7 +732,7 @@ function buildPostCover(post: BlogPost, index: number) {
     "rgba(236,72,153,.30), rgba(14,165,233,.24)",
     "rgba(99,102,241,.30), rgba(250,204,21,.22)",
   ];
-  return `linear-gradient(135deg, ${accents[index % accents.length]}), url('/images/home-background.png')`;
+  return `linear-gradient(135deg, ${accents[index % accents.length]}), var(--home-wallpaper-image, url('/images/home-background.png'))`;
 }
 
 function buildPhotoCover(photo: Photo) {
@@ -1018,7 +1018,7 @@ function PostCard({ post, index, dataReady = true }: { post: BlogPost; index: nu
   const imageHeight = imageHeights[index % imageHeights.length];
   const coverBg = post.cover_url
     ? `url("${post.cover_url}")`
-    : `linear-gradient(135deg, rgba(16,185,129,.12), rgba(14,165,233,.12)), url('/images/home-background.png')`;
+    : `linear-gradient(135deg, rgba(16,185,129,.12), rgba(14,165,233,.12)), var(--home-wallpaper-image, url('/images/home-background.png'))`;
 
   return (
     <Link href={`/articles/${post.id}`} className={`home-masonry-card block no-underline ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: `${240 + index * 70}ms` } : undefined}>
