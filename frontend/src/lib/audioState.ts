@@ -158,7 +158,10 @@ export function setVolume(v: number) {
 
 export function togglePlay() {
   const a = getAudio();
-  if (!a.src) return;
+  if (!a.src) {
+    if (_state.currentSong) _resolveAudioSource(_state.currentSong);
+    return;
+  }
   if (a.paused) a.play().catch(() => {});
   else a.pause();
 }
@@ -184,6 +187,26 @@ export function playAtIndex(index: number) {
   if (index < 0 || index >= _state.playlist.length) return;
   _state.playlistIndex = index;
   _resolveAndPlay(_state.playlist[index]);
+}
+
+function _resolveAudioSource(song: SongInfo) {
+  Promise.all([
+    fetch(`${API_BASE}/music/song?id=${song.id}`).then((r) => r.json()),
+    fetch(`${API_BASE}/music/lyric?id=${song.id}`).then((r) => r.json()),
+  ])
+    .then(([urlData, lrcData]) => {
+      if (!urlData.url) return;
+      const raw = lrcData.tlyric || lrcData.lyric || "";
+      if (raw) {
+        const parsed = parseLRC(raw);
+        _state.lyrics = parsed.length > 0 ? parsed : null;
+      }
+      const a = getAudio();
+      a.src = urlData.url;
+      a.load();
+      notify();
+    })
+    .catch(() => { notify(); });
 }
 
 function _resolveAndPlay(song: SongInfo) {
@@ -319,6 +342,9 @@ export function useAudioState(): AudioState {
   useEffect(() => {
     loadPersisted();
     notify();
+    if (_state.currentSong && !getAudio().src) {
+      _resolveAudioSource(_state.currentSong);
+    }
   }, []);
 
   return state;

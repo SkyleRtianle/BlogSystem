@@ -46,13 +46,9 @@ type ProfileSettings = {
   githubUrl: string;
   qqUrl: string;
   intro: string;
-  notice: string;
 };
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
-
-const DEFAULT_NOTICE =
-  "欢迎来到我的博客！页面骨架已拆分为首页、文章、照片墙、友链和留言，后续可以继续细化权限、详情页和后台管理。";
 
 const DEFAULT_PROFILE_SETTINGS: ProfileSettings = {
   avatarUrl: "",
@@ -61,7 +57,6 @@ const DEFAULT_PROFILE_SETTINGS: ProfileSettings = {
   githubUrl: "",
   qqUrl: "",
   intro: "Hello, I am Skyler.",
-  notice: DEFAULT_NOTICE,
 };
 
 const siteInfo = [
@@ -368,7 +363,7 @@ export default function HomePage() {
           />
           <MusicPlayer hrefPrefix="" dataReady={dataReady} />
         </div>
-        <ShowcaseNoticeBar notice={profileSettings.notice || DEFAULT_NOTICE} dataReady={dataReady} />
+        <ShowcaseNoticeBar dataReady={dataReady} />
         <RecentPostsCarousel posts={posts} photos={photos} isLoading={isLoadingPosts} isLoadingPhotos={isLoadingPhotos} error={postsError} dataReady={dataReady} hrefPrefix="" />
       </section>
 
@@ -573,9 +568,9 @@ function ShowcaseProfileCard({
   );
 }
 
-function ShowcaseNoticeBar({ notice, dataReady }: { notice: string; dataReady: boolean }) {
+function ShowcaseNoticeBar({ dataReady }: { dataReady: boolean }) {
   const { isPlaying, lyrics, lyricIndex } = useAudioState();
-  const signature = notice || "欢迎来到我的博客！";
+  const signature = "欢迎来到我的博客！";
   const currentLyric = isPlaying && lyrics && lyricIndex >= 0
     ? lyrics[lyricIndex]?.text ?? ""
     : "";
@@ -882,15 +877,6 @@ function ContactIcon({ name }: { name: "github" | "mail" | "qq" }) {
   );
 }
 
-function NoticeCard({ notice, index = 0 }: { notice: string; index?: number }) {
-  return (
-    <div className="home-card card-fly-in p-5" style={{ animationDelay: `${index * 80}ms` }}>
-      <h2 className="home-section-title">公告</h2>
-      <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">{notice || DEFAULT_NOTICE}</p>
-    </div>
-  );
-}
-
 function ProfileEditor({
   draft,
   error,
@@ -912,7 +898,7 @@ function ProfileEditor({
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-2xl font-black text-slate-900">编辑个人卡片</h2>
-            <p className="mt-1 text-sm text-slate-600">主页展示信息和公告会按当前账号保存。</p>
+            <p className="mt-1 text-sm text-slate-600">主页展示信息会按当前账号保存。</p>
           </div>
           <button type="button" className="home-square-button" onClick={onClose} aria-label="关闭编辑面板">
             ×
@@ -1011,16 +997,6 @@ function ProfileEditor({
             value={draft.intro}
             onChange={(event) => onChange("intro", event.target.value)}
             placeholder="写一点个人简介"
-          />
-        </label>
-
-        <label className="profile-edit-field mt-4">
-          <span>博客公告</span>
-          <textarea
-            className="home-field min-h-[116px] py-3"
-            value={draft.notice}
-            onChange={(event) => onChange("notice", event.target.value)}
-            placeholder={DEFAULT_NOTICE}
           />
         </label>
 
@@ -1229,7 +1205,6 @@ function normalizeProfileSettings(settings: ProfileSettings): ProfileSettings {
     githubUrl: normalizeUrl(settings.githubUrl),
     qqUrl: normalizeUrl(settings.qqUrl),
     intro: settings.intro.trim() || DEFAULT_PROFILE_SETTINGS.intro,
-    notice: settings.notice.trim() || DEFAULT_NOTICE,
   };
 }
 

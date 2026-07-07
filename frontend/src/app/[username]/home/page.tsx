@@ -31,7 +31,6 @@ type Photo = {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
 
-const DEFAULT_NOTICE = "欢迎来到我的博客！";
 
 const siteInfo = [
   ["构建平台", "Local Dev"],
@@ -166,7 +165,7 @@ export default function PublicHomePage() {
           />
           <MusicPlayer hrefPrefix={`/${username}`} dataReady={dataReady} />
         </div>
-        <ShowcaseNoticeBar notice={DEFAULT_NOTICE} dataReady={dataReady} />
+        <ShowcaseNoticeBar dataReady={dataReady} />
         <RecentPostsCarousel posts={posts} photos={photos} isLoading={isLoadingPosts} isLoadingPhotos={isLoadingPhotos} error={postsError} dataReady={dataReady} hrefPrefix={`/${username}`} />
       </section>
 
@@ -304,9 +303,9 @@ function ShowcaseProfileCard({
   );
 }
 
-function ShowcaseNoticeBar({ notice, dataReady }: { notice: string; dataReady: boolean }) {
+function ShowcaseNoticeBar({ dataReady }: { dataReady: boolean }) {
   const { isPlaying, lyrics, lyricIndex } = useAudioState();
-  const signature = notice || "欢迎来到我的博客！";
+  const signature = "欢迎来到我的博客！";
   const currentLyric = isPlaying && lyrics && lyricIndex >= 0
     ? lyrics[lyricIndex]?.text ?? ""
     : "";
@@ -488,15 +487,6 @@ function PublicProfileCard({ username, index = 0 }: { username: string; index?: 
       <h2 className="mt-4 truncate text-xl font-bold">{username}</h2>
       <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-emerald-400" />
       <p className="mt-3 line-clamp-3 text-xs leading-5 text-slate-700">{username}&apos;s Blog</p>
-    </div>
-  );
-}
-
-function NoticeCard({ index = 0 }: { index?: number }) {
-  return (
-    <div className="home-card card-fly-in p-5" style={{ animationDelay: `${index * 80}ms` }}>
-      <h2 className="home-section-title">公告</h2>
-      <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">{DEFAULT_NOTICE}</p>
     </div>
   );
 }

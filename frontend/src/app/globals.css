@@ -2010,6 +2010,7 @@ textarea {
   border: 1px solid rgb(255 255 255 / 0.34);
   background: rgb(var(--glass-rgb) / calc(var(--glass-alpha) * 0.54));
   color: rgb(15 23 42);
+  margin-left: 200px;
   padding: 0 18px;
   font-size: 13px;
   font-weight: 900;
