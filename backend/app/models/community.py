@@ -56,7 +56,7 @@ class MessageList(SQLModel):
 
 class PhotoBase(SQLModel):
     title: str = Field(min_length=1, max_length=100)
-    image_url: str = Field(min_length=1, max_length=500)
+    image_url: str = Field(min_length=1, max_length=500, unique=True, index=True)
     description: str = Field(default="", max_length=240)
 
 
@@ -68,6 +68,18 @@ class Photo(PhotoBase, table=True):
 
 class PhotoCreate(PhotoBase):
     pass
+
+
+class PhotoUploadRequest(SQLModel):
+    filename: str = Field(min_length=1, max_length=255)
+    content_type: str = Field(min_length=1, max_length=100)
+    size: int = Field(gt=0, le=20 * 1024 * 1024)
+
+
+class PhotoUploadComplete(SQLModel):
+    filename: str = Field(min_length=1, max_length=255)
+    title: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=240)
 
 
 class PhotoRead(PhotoBase):

@@ -65,13 +65,16 @@ Vercel 环境中应移除已有的 `NEXT_PUBLIC_API_BASE_URL` 本地地址覆盖
 并在运行时函数中读取注入变量；不要手动设置该变量，也不要在构建或 middleware
 中读取它。
 
-### 部署前的存储前提
+### Neon + Cloudflare R2 持久存储
 
-目前 `DATABASE_URL` 默认指向本地 SQLite，照片上传写入 `backend/uploads/photos`。
-这些本地文件不适合作为 Vercel Functions 的持久存储。正式部署前需要配置托管数据库
-的 `DATABASE_URL`、添加对应数据库驱动，并将照片上传/读取/删除迁移到持久对象存储。
-不能仅将 SQLite 或照片目录搬到 `/tmp`，因为实例之间不共享这些数据。
-此配置只完成服务和路由接入；数据库和照片存储供应商仍需选择和配置。
+生产环境使用 Neon PostgreSQL 保存账号、文章和评论，Cloudflare R2 保存照片。
+本地开发默认仍使用 SQLite 和本地照片目录。后端已包含 PostgreSQL 驱动和 R2 接入，
+照片支持浏览器直传；生产环境缺少配置时会明确报错，不会写入临时本地文件。
+
+按照 [Neon + R2 配置步骤](docs/neon-r2.md) 创建资源、设置存储桶 CORS 和
+Vercel 环境变量；变量模板见 `backend/.env.neon-r2.example`。
+已有内容可通过 `backend/scripts/migrate_to_neon_r2.py` 先进行只读检查，再迁移到空的
+Neon 数据库和专用 R2 桶。
 
 ### 本地验证
 

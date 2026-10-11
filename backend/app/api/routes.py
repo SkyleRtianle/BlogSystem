@@ -1,16 +1,19 @@
 import hashlib
 import hmac
-import os
+import re
 import secrets
-import uuid
+from contextlib import suppress
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
+from sqlalchemy.exc import IntegrityError
+from starlette.concurrency import run_in_threadpool
 from sqlmodel import Session, col, func, or_, select
 
 from app.core.config import settings
 from app.db.session import get_session
+from app.db.queries import post_tag_filter
 from app.models.community import (
     FriendLink,
     FriendLinkCreate,
@@ -23,14 +26,16 @@ from app.models.community import (
     Photo,
     PhotoList,
     PhotoRead,
+    PhotoUploadComplete,
+    PhotoUploadRequest,
 )
 from app.models.post import Post, PostCreate, PostList, PostRead, PostUpdate
 from app.models.user import AuthResponse, User, UserCreate, UserLogin, UserRead
 from app.services.post_processing import build_summary, find_keyword_matches, generate_tags
+from app.services.photo_storage import get_photo_storage, image_content_type, photo_filename
 
 router = APIRouter()
 PASSWORD_ITERATIONS = 210_000
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "uploads", "photos")
 
 
 def _normalize_email(value: str) -> str:
@@ -221,14 +226,14 @@ async def list_posts(
         pattern = f"%{keyword.strip()}%"
         filters.append(
             or_(
-                col(Post.title).like(pattern),
-                col(Post.content).like(pattern),
-                col(Post.summary).like(pattern),
+                col(Post.title).ilike(pattern),
+                col(Post.content).ilike(pattern),
+                col(Post.summary).ilike(pattern),
             )
         )
 
     if tag:
-        filters.append(col(Post.tags).like(f"%{tag.strip()}%"))
+        filters.append(post_tag_filter(session, tag))
 
     for item in filters:
         statement = statement.where(item)
@@ -339,27 +344,77 @@ async def create_photo(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
+    storage=Depends(get_photo_storage),
 ) -> Photo:
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    content_type = image_content_type(file.filename or "image.jpg", file.content_type)
+    content = await file.read(settings.photo_max_bytes + 1)
+    if not 0 < len(content) <= settings.photo_max_bytes:
+        raise HTTPException(status_code=413, detail="Photo must be between 1 byte and 20 MiB")
+    filename = photo_filename(current_user.id, content_type)
+    await run_in_threadpool(storage.put, filename, content, content_type)
+    return await run_in_threadpool(_save_photo, session, storage, current_user.id, filename, title, description)
 
-    ext = os.path.splitext(file.filename or "image.jpg")[1] or ".jpg"
-    filename = f"{uuid.uuid4().hex}{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
 
-    content = await file.read()
-    with open(filepath, "wb") as fh:
-        fh.write(content)
-
+def _save_photo(session, storage, owner_id, filename, title, description) -> Photo:
     photo = Photo(
-        owner_id=current_user.id,
+        owner_id=owner_id,
         title=title.strip(),
         image_url=filename,
         description=description.strip(),
     )
-    session.add(photo)
-    session.commit()
+    try:
+        session.add(photo)
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        # A concurrent completion may have already saved this object; never delete it.
+        if session.exec(select(Photo).where(Photo.image_url == filename)).first() is not None:
+            raise HTTPException(status_code=409, detail="Upload has already been completed")
+        with suppress(HTTPException, OSError):
+            storage.delete(filename)
+        raise
+    except Exception:
+        session.rollback()
+        with suppress(HTTPException, OSError):
+            storage.delete(filename)
+        raise
     session.refresh(photo)
     return photo
+
+
+@router.post("/photos/upload-url")
+def prepare_photo_upload(
+    payload: PhotoUploadRequest,
+    current_user: User = Depends(get_current_user),
+    storage=Depends(get_photo_storage),
+) -> dict:
+    content_type = image_content_type(payload.filename, payload.content_type)
+    if not storage.remote:
+        return {"storage": "local"}
+    filename = photo_filename(current_user.id, content_type)
+    return {
+        "storage": "r2",
+        "filename": filename,
+        "content_type": content_type,
+        "upload_url": storage.upload_url(filename, content_type),
+    }
+
+
+@router.post("/photos/complete", response_model=PhotoRead, status_code=201)
+def complete_photo_upload(
+    payload: PhotoUploadComplete,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    storage=Depends(get_photo_storage),
+) -> Photo:
+    if not storage.remote:
+        raise HTTPException(status_code=409, detail="Direct uploads require R2 storage")
+    if not re.fullmatch(rf"{current_user.id}_[0-9a-f]{{32}}\.(jpg|png|webp|gif)", payload.filename):
+        raise HTTPException(status_code=403, detail="Not authorized to complete this upload")
+    if session.exec(select(Photo).where(Photo.image_url == payload.filename)).first() is not None:
+        raise HTTPException(status_code=409, detail="Upload has already been completed")
+    storage.validate_upload(payload.filename)
+    return _save_photo(session, storage, current_user.id, payload.filename, payload.title, payload.description)
 
 
 @router.get("/photos", response_model=PhotoList)
@@ -374,27 +429,23 @@ async def list_photos(
 
 
 @router.get("/photos/file/{filename}")
-async def get_photo_file(filename: str) -> FileResponse:
-    filepath = os.path.join(UPLOAD_DIR, filename)
-    if not os.path.isfile(filepath):
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(filepath)
+def get_photo_file(filename: str, storage=Depends(get_photo_storage)) -> Response:
+    return storage.response(filename)
 
 
 @router.delete("/photos/{photo_id}", status_code=204)
-async def delete_photo(
+def delete_photo(
     photo_id: int,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
+    storage=Depends(get_photo_storage),
 ) -> None:
     photo = session.exec(select(Photo).where(Photo.id == photo_id, Photo.owner_id == current_user.id)).first()
     if photo is None:
         raise HTTPException(status_code=404, detail="Photo not found")
 
     if not photo.image_url.startswith("data:"):
-        filepath = os.path.join(UPLOAD_DIR, photo.image_url)
-        if os.path.isfile(filepath):
-            os.remove(filepath)
+        storage.delete(photo.image_url)
 
     session.delete(photo)
     session.commit()

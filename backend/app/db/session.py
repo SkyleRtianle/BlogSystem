@@ -1,11 +1,11 @@
 from sqlalchemy import inspect, text
-from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel import SQLModel, Session
 
 from app.core.config import settings
+from app.db.engine import build_engine
 from app.models import Comment, FriendLink, Message, Photo, Post, User
 
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
-engine = create_engine(settings.database_url, connect_args=connect_args)
+engine = build_engine(settings.database_url)
 
 
 def _ensure_sqlite_owner_columns() -> None:

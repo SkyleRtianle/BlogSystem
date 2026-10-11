@@ -13,6 +13,7 @@ import SiteHeader from "@/components/SiteHeader";
 import ImageCropper from "@/components/ImageCropper";
 import LoadableImage from "@/components/LoadableImage";
 import { useAppSettings } from "@/lib/useAppSettings";
+import { uploadPhoto } from "@/lib/photoUpload";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
@@ -87,6 +88,7 @@ export default function PhotosPage() {
   const { isNight, showWallpaper, glassAlpha, setGlassAlpha, toggleNight, toggleWallpaper } = useAppSettings();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const [dataReady, setDataReady] = useState(false);
   const [fetchComplete, setFetchComplete] = useState(false);
   const [activeAlbumId, setActiveAlbumId] = useState<string | null>(null);
@@ -213,6 +215,7 @@ export default function PhotosPage() {
       if (files.length === 0) return;
 
       setIsSubmitting(true);
+      setUploadError("");
       try {
         const token = requireAuthToken();
         if (!token) return;
@@ -222,16 +225,7 @@ export default function PhotosPage() {
         const title = pendingAlbumTitleRef.current.trim() || getFileTitle(files[0]);
 
         for (const file of files) {
-          const formData = new FormData();
-          formData.append("title", title);
-          formData.append("description", `${ALBUM_PREFIX}${albumId}__`);
-          formData.append("file", file);
-
-          const response = await fetch(`${API_BASE_URL}/photos`, {
-            method: "POST",
-            headers: authHeaders(token),
-            body: formData,
-          });
+          const response = await uploadPhoto(API_BASE_URL, token, file, title, `${ALBUM_PREFIX}${albumId}__`);
           ensureAuthorized(response);
           if (!response.ok) throw new Error("照片添加失败");
           createdPhotos.push(await response.json());
@@ -240,13 +234,16 @@ export default function PhotosPage() {
         setPhotos((current) => [...createdPhotos.reverse(), ...current]);
       } catch (error) {
         console.error(error);
+        setUploadError(error instanceof Error ? error.message : "照片添加失败，请稍后重试");
+        // Refresh any photos that completed before a later upload failed.
+        await fetchPhotos();
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = "";
         pendingAlbumTitleRef.current = "";
         setIsSubmitting(false);
       }
     },
-    [],
+    [fetchPhotos],
   );
 
   const selectPhotos = useCallback((event: ChangeEvent<HTMLInputElement>) => {
@@ -361,6 +358,8 @@ export default function PhotosPage() {
             </div>
           </div>
         </div>
+
+        {uploadError && <p role="alert" className="mb-6 text-center text-red-500">{uploadError}</p>}
 
         {!fetchComplete && (
           <div className="photo-skeleton-grid">

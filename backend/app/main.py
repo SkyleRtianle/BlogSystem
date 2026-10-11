@@ -13,6 +13,7 @@ from app.db.session import init_db
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    settings.validate_runtime()
     init_db()
     yield
 

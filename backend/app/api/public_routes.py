@@ -3,6 +3,7 @@ from sqlmodel import Session, col, func, or_, select
 
 from app.api.routes import get_current_user
 from app.db.session import get_session
+from app.db.queries import post_tag_filter
 from app.models.community import (
     Comment,
     CommentCreate,
@@ -45,15 +46,15 @@ async def public_list_posts(
     if keyword:
         pattern = f"%{keyword.strip()}%"
         kw_filter = or_(
-            col(Post.title).like(pattern),
-            col(Post.content).like(pattern),
-            col(Post.summary).like(pattern),
+            col(Post.title).ilike(pattern),
+            col(Post.content).ilike(pattern),
+            col(Post.summary).ilike(pattern),
         )
         statement = statement.where(kw_filter)
         count_statement = count_statement.where(kw_filter)
 
     if tag:
-        tag_filter = col(Post.tags).like(f"%{tag.strip()}%")
+        tag_filter = post_tag_filter(session, tag)
         statement = statement.where(tag_filter)
         count_statement = count_statement.where(tag_filter)
 
