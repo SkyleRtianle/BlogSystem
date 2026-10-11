@@ -1,0 +1,41 @@
+FIELD COUNTS
+- PAGEREF: 9
+- PAGE: 2
+
+EXAMPLES
+
+[PAGEREF]
+  - PAGEREF _Toc45011176 \h
+  - PAGEREF _Toc45011177 \h
+  - PAGEREF _Toc45011178 \h
+  - PAGEREF _Toc45011179 \h
+  - PAGEREF _Toc45011180 \h
+  - PAGEREF _Toc45011181 \h
+  - PAGEREF _Toc45011182 \h
+  - PAGEREF _Toc45011183 \h
+
+[PAGE]
+  - PAGE
+  - PAGE \* MERGEFORMAT
+
+PER-PART DETAILS
+
+== word/document.xml ==
+- PAGEREF _Toc45011176 \h
+- PAGEREF _Toc45011177 \h
+- PAGEREF _Toc45011178 \h
+- PAGEREF _Toc45011179 \h
+- PAGEREF _Toc45011180 \h
+- PAGEREF _Toc45011181 \h
+- PAGEREF _Toc45011182 \h
+- PAGEREF _Toc45011183 \h
+- PAGEREF _Toc45011184 \h
+
+== word/footer1.xml ==
+- PAGE
+
+== word/footer2.xml ==
+- PAGE \* MERGEFORMAT
+
+REMINDER
+- If the PDF/PNGs show placeholders or wrong page numbers/TOC, open in Word and run: Ctrl+A → F9 (Update Fields), then re-render.

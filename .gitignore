@@ -30,3 +30,7 @@ backend/uploads/
 # Logs
 *.log
 .blogsystem-run/
+.vercel/
+
+# Generated presentation/export artifacts
+outputs/

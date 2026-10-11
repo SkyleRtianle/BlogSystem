@@ -1,0 +1,6 @@
+parts_source 33 parts_final 33 same_names True
+changed_parts ['word/document.xml', 'word/settings.xml', 'word/styles.xml']
+unexpected_changes []
+media_parts 14
+embedding_parts 1
+altchunk_parts 0

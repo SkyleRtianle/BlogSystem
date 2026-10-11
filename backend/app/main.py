@@ -18,7 +18,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    application = FastAPI(title=settings.app_name, lifespan=lifespan)
+    application = FastAPI(
+        title=settings.app_name,
+        lifespan=lifespan,
+        docs_url=f"{settings.api_prefix}/docs",
+        swagger_ui_oauth2_redirect_url=f"{settings.api_prefix}/docs/oauth2-redirect",
+        redoc_url=f"{settings.api_prefix}/redoc",
+        openapi_url=f"{settings.api_prefix}/openapi.json",
+    )
 
     application.add_middleware(
         CORSMiddleware,

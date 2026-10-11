@@ -1,0 +1,14 @@
+[style_lint] direct run-formatting runs: 578
+[style_lint] direct paragraph-formatting paragraphs: 321
+[style_lint] top fonts by char count: 宋体(7983), 黑体(338), 等线 Light(5)
+[style_lint] heading-like paragraphs not using Heading styles (first 10):
+  - #6: style='Normal' text='课 程 设 计 报 告'
+  - #10: style='Normal' text='              课程名称         软件综合实践       ___'
+  - #11: style='Normal' text='    设计题目                            ___ '
+  - #12: style='Normal' text='    课程教师                              '
+  - #13: style='Normal' text='    设计起止日期     2021.7.5-2021.7.23    '
+  - #15: style='Normal' text='评    分                              '
+  - #18: style='Normal' text='大数据与软件学院'
+  - #183: style='Normal' text='姓  名'
+  - #185: style='Normal' text='学  号'
+  - #202: style='Report Normal' text='编号'

@@ -7,7 +7,7 @@ import { getAuthToken, saveAuthSession } from "@/lib/auth";
 
 type AuthMode = "login" | "register";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function getAuthErrorMessage(status: number, detail: unknown, isLogin: boolean) {
@@ -104,80 +104,103 @@ export default function Home() {
       <div className="absolute inset-0 backdrop-blur-[5px]" />
 
       <section className="relative z-10 flex min-h-screen items-center justify-center px-5 py-8">
-        <div className="max-h-[calc(100vh-2rem)] w-full max-w-[420px] overflow-y-auto rounded-[28px] border border-white/35 bg-white/14 px-7 py-6 shadow-2xl shadow-black/35 backdrop-blur-2xl sm:px-9">
-          <div className="mb-6 text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-white/70">
-              BlogSystem
-            </p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-normal text-white">
-              {isLogin ? "欢迎回来" : "创建账号"}
-            </h1>
-            <p className="mt-2 text-sm leading-6 text-white/70">
-              {message}
-            </p>
-          </div>
-
-          <div className="mb-5 grid grid-cols-2 rounded-full border border-white/25 bg-black/18 p-1">
-            <button
-              type="button"
-              onClick={() => switchMode("login")}
-              className={`h-10 rounded-full text-sm font-medium transition ${
-                isLogin ? "bg-white text-slate-950 shadow-lg" : "text-white/72 hover:text-white"
-              }`}
-            >
+        <div className={`auth-shell ${isLogin ? "is-login" : "is-register"}`}>
+          <div className="auth-mobile-tabs">
+            <button type="button" onClick={() => switchMode("login")} className={isLogin ? "is-active" : ""}>
               登录
             </button>
-            <button
-              type="button"
-              onClick={() => switchMode("register")}
-              className={`h-10 rounded-full text-sm font-medium transition ${
-                !isLogin ? "bg-white text-slate-950 shadow-lg" : "text-white/72 hover:text-white"
-              }`}
-            >
+            <button type="button" onClick={() => switchMode("register")} className={!isLogin ? "is-active" : ""}>
               注册
             </button>
           </div>
 
-          <form onSubmit={submitAuth} noValidate className="space-y-3">
-            {!isLogin && (
-              <>
-                <label className="block">
-                  <span className="mb-1.5 block text-sm text-white/78">用户名</span>
-                  <input type="text" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className="auth-input" placeholder="个人页面地址 (可选)" />
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-sm text-white/78">昵称</span>
-                  <input type="text" value={form.nickname} onChange={(e) => setForm({ ...form, nickname: e.target.value })} autoComplete="nickname" className="auth-input" placeholder="给自己取个名字" />
-                </label>
-              </>
-            )}
+          <div className="auth-panel auth-panel-login" inert={!isLogin} aria-hidden={!isLogin}>
+            <AuthHeader title="欢迎回来" message={message} />
+            <form onSubmit={submitAuth} noValidate className="space-y-3">
+              <label className="block">
+                <span className="mb-1.5 block text-sm text-white/78">邮箱</span>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(event) => setForm({ ...form, email: event.target.value })}
+                  autoComplete="email"
+                  className="auth-input"
+                  placeholder="name@example.com"
+                />
+              </label>
 
-            <label className="block">
-              <span className="mb-1.5 block text-sm text-white/78">邮箱</span>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(event) => setForm({ ...form, email: event.target.value })}
-                autoComplete="email"
-                className="auth-input"
-                placeholder="name@example.com"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-1.5 block text-sm text-white/78">密码</span>
+              <label className="block">
+                <span className="mb-1.5 block text-sm text-white/78">密码</span>
                 <input
                   type="password"
                   value={form.password}
                   onChange={(event) => setForm({ ...form, password: event.target.value })}
-                  autoComplete={isLogin ? "current-password" : "new-password"}
-                  minLength={isLogin ? undefined : 6}
+                  autoComplete="current-password"
                   className="auth-input"
                   placeholder="输入密码"
                 />
-            </label>
+              </label>
 
-            {!isLogin && (
+              <div className="flex min-h-8 items-center justify-between text-sm text-white/72">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="size-4 rounded border-white/30 bg-white/15 accent-white"
+                  />
+                  记住我
+                </label>
+                <button type="button" className="transition hover:text-white">
+                  忘记密码
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting || !isLogin}
+                className="auth-submit"
+              >
+                {isSubmitting && isLogin ? "处理中..." : "登录"}
+              </button>
+            </form>
+          </div>
+
+          <div className="auth-panel auth-panel-register" inert={isLogin} aria-hidden={isLogin}>
+            <AuthHeader title="创建账号" message={message} />
+            <form onSubmit={submitAuth} noValidate className="space-y-3">
+              <label className="block">
+                <span className="mb-1.5 block text-sm text-white/78">用户名</span>
+                <input type="text" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className="auth-input" placeholder="个人页面地址 (可选)" />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm text-white/78">昵称</span>
+                <input type="text" value={form.nickname} onChange={(e) => setForm({ ...form, nickname: e.target.value })} autoComplete="nickname" className="auth-input" placeholder="给自己取个名字" />
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-sm text-white/78">邮箱</span>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(event) => setForm({ ...form, email: event.target.value })}
+                  autoComplete="email"
+                  className="auth-input"
+                  placeholder="name@example.com"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-sm text-white/78">密码</span>
+                <input
+                  type="password"
+                  value={form.password}
+                  onChange={(event) => setForm({ ...form, password: event.target.value })}
+                  autoComplete="new-password"
+                  minLength={6}
+                  className="auth-input"
+                  placeholder="输入密码"
+                />
+              </label>
+
               <label className="block">
                 <span className="mb-1.5 block text-sm text-white/78">确认密码</span>
                 <input
@@ -190,44 +213,53 @@ export default function Home() {
                   placeholder="再次输入密码"
                 />
               </label>
-            )}
 
-            <div className="flex min-h-8 items-center justify-between text-sm text-white/72">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  className="size-4 rounded border-white/30 bg-white/15 accent-white"
-                />
-                记住我
-              </label>
-              {isLogin && (
-                <button type="button" className="transition hover:text-white">
-                  忘记密码
-                </button>
-              )}
+              <button
+                type="submit"
+                disabled={isSubmitting || isLogin}
+                className="auth-submit"
+              >
+                {isSubmitting && !isLogin ? "处理中..." : "注册"}
+              </button>
+            </form>
+          </div>
+
+          <div className="auth-slider" aria-hidden="true">
+            <div className="auth-slider-content auth-slider-login">
+              <p className="text-xs font-semibold uppercase tracking-[0.32em] text-white/72">BlogSystem</p>
+              <h2>开始写作</h2>
+              <p>还没有账号？注册后整理你的文章、照片与灵感。</p>
             </div>
+            <div className="auth-slider-content auth-slider-register">
+              <p className="text-xs font-semibold uppercase tracking-[0.32em] text-white/72">BlogSystem</p>
+              <h2>欢迎回来</h2>
+              <p>已经有账号了，回到你的个人博客工作台。</p>
+            </div>
+          </div>
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="mt-1 h-11 w-full rounded-full bg-white text-sm font-semibold text-slate-950 shadow-xl shadow-black/25 transition hover:bg-white/90"
-            >
-              {isSubmitting ? "处理中..." : isLogin ? "登录" : "注册"}
-            </button>
-          </form>
-
-          <p className="mt-5 text-center text-sm text-white/70">
-            {isLogin ? "还没有账号？" : "已经有账号？"}
-            <button
-              type="button"
-              onClick={() => switchMode(isLogin ? "register" : "login")}
-              className="ml-2 font-medium text-white underline-offset-4 hover:underline"
-            >
+          <div className="auth-slider-actions">
+            <button type="button" onClick={() => switchMode(isLogin ? "register" : "login")}>
               {isLogin ? "立即注册" : "去登录"}
             </button>
-          </p>
+          </div>
         </div>
       </section>
     </main>
+  );
+}
+
+function AuthHeader({ title, message }: { title: string; message: string }) {
+  return (
+    <div className="mb-6 text-center">
+      <p className="text-xs font-semibold uppercase tracking-[0.32em] text-white/70">
+        BlogSystem
+      </p>
+      <h1 className="mt-3 text-3xl font-semibold tracking-normal text-white">
+        {title}
+      </h1>
+      <p className="mt-2 text-sm leading-6 text-white/70">
+        {message}
+      </p>
+    </div>
   );
 }

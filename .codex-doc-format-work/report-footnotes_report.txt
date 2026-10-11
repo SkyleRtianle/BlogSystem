@@ -1,0 +1,4 @@
+[document.xml] footnoteReferences=0 ids=[]
+[document.xml] endnoteReferences=0 ids=[]
+[word/footnotes.xml] defined_footnotes=0 ids=[]
+[word/endnotes.xml] defined_endnotes=0 ids=[]

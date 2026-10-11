@@ -1,0 +1,30 @@
+FIELD COUNTS
+- PAGE: 3
+- TOC: 1
+
+EXAMPLES
+
+[PAGE]
+  - PAGE
+  - PAGE \* MERGEFORMAT
+  - PAGE
+
+[TOC]
+  - TOC \o "1-3" \h \z \u
+
+PER-PART DETAILS
+
+== word/document.xml ==
+- TOC \o "1-3" \h \z \u
+
+== word/footer1.xml ==
+- PAGE
+
+== word/footer2.xml ==
+- PAGE \* MERGEFORMAT
+
+== word/footer3.xml ==
+- PAGE
+
+REMINDER
+- If the PDF/PNGs show placeholders or wrong page numbers/TOC, open in Word and run: Ctrl+A → F9 (Update Fields), then re-render.

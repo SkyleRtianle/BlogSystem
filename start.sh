@@ -126,15 +126,15 @@ start_frontend() {
   echo "正在启动前端..."
   case "$FRONTEND_RUNNER" in
     pnpm)
-      nohup sh -c "cd \"$FRONTEND_DIR\" && exec \"$PNPM_BIN\" dev" \
+      NEXT_PUBLIC_API_BASE_URL="${NEXT_PUBLIC_API_BASE_URL:-$BACKEND_URL/api}" nohup sh -c "cd \"$FRONTEND_DIR\" && exec \"$PNPM_BIN\" dev" \
         >"$LOG_DIR/frontend.log" 2>&1 </dev/null &
       ;;
     corepack-pnpm)
-      nohup sh -c "cd \"$FRONTEND_DIR\" && exec \"$COREPACK_BIN\" pnpm dev" \
+      NEXT_PUBLIC_API_BASE_URL="${NEXT_PUBLIC_API_BASE_URL:-$BACKEND_URL/api}" nohup sh -c "cd \"$FRONTEND_DIR\" && exec \"$COREPACK_BIN\" pnpm dev" \
         >"$LOG_DIR/frontend.log" 2>&1 </dev/null &
       ;;
     npm)
-      nohup sh -c "cd \"$FRONTEND_DIR\" && exec \"$NPM_BIN\" run dev" \
+      NEXT_PUBLIC_API_BASE_URL="${NEXT_PUBLIC_API_BASE_URL:-$BACKEND_URL/api}" nohup sh -c "cd \"$FRONTEND_DIR\" && exec \"$NPM_BIN\" run dev" \
         >"$LOG_DIR/frontend.log" 2>&1 </dev/null &
       ;;
   esac
@@ -151,7 +151,7 @@ cat <<EOF
 启动完成。
 前端地址: $FRONTEND_URL
 后端地址: $BACKEND_URL
-接口文档: $BACKEND_URL/docs
+接口文档: $BACKEND_URL/api/docs
 
 日志目录: $LOG_DIR
 关闭服务: ./stop.sh

@@ -48,7 +48,7 @@ type ProfileSettings = {
   intro: string;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
 const DEFAULT_PROFILE_SETTINGS: ProfileSettings = {
   avatarUrl: "",
@@ -278,22 +278,6 @@ export default function HomePage() {
     return Object.entries(counts).map(([name, count]) => ({ name, count }));
   }, [posts]);
 
-  const homeStats = useMemo(() => {
-    const tags = new Set(posts.flatMap((post) => post.tags));
-    const wordCount = posts.reduce((sum, post) => sum + post.content.length, 0);
-    const latest = posts[0];
-
-    return [
-      ["文章", String(totalPosts)],
-      ["分类", String(categories.length)],
-      ["标签", String(tags.size)],
-      ["总字数", wordCount.toLocaleString()],
-      ["最新文章", latest ? latest.title : "暂无"],
-      ["最近分类", latest?.category ?? "暂无"],
-      ["最后活动", latest ? formatDate(latest.created_at) : "暂无"],
-    ];
-  }, [categories.length, posts, totalPosts]);
-
   const showcaseStats = useMemo(() => {
     const tags = new Set(posts.flatMap((post) => post.tags));
     return [
@@ -387,107 +371,6 @@ export default function HomePage() {
         />
       )}
     </main>
-  );
-}
-
-function LatestPosts({
-  posts,
-  isLoading,
-  error,
-  categories,
-  dataReady,
-}: {
-  posts: BlogPost[];
-  isLoading: boolean;
-  error: string;
-  categories: Array<{ name: string; count: number }>;
-  dataReady: boolean;
-}) {
-  const tags = useMemo(() => {
-    const counts: Record<string, number> = {};
-    posts.forEach((post) => post.tags.forEach((tag) => {
-      counts[tag] = (counts[tag] ?? 0) + 1;
-    }));
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 12);
-  }, [posts]);
-
-  return (
-    <section className="space-y-5">
-      <div className={`home-card space-y-4 p-4 ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: "160ms" } : undefined}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="home-section-title">最新文章</h2>
-          <Link href="/articles" className="home-pill-button">查看全部</Link>
-        </div>
-
-        {categories.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold text-slate-600">分类：</span>
-            {categories.map((cat) => (
-              <Link
-                key={cat.name}
-                href={`/articles?category=${encodeURIComponent(cat.name)}`}
-                className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-100"
-              >
-                {cat.name} ({cat.count})
-              </Link>
-            ))}
-          </div>
-        )}
-
-        {tags.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs font-bold text-slate-600">标签：</span>
-            {tags.map(([tag, count]) => (
-              <Link
-                key={tag}
-                href={`/articles?tag=${encodeURIComponent(tag)}`}
-                className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-600"
-              >
-                {tag} ({count})
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {isLoading && (
-        <div className="home-skeleton-grid">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="home-skeleton-card">
-              <div className="home-skeleton-cover" style={{ height: `${[150, 210, 176, 238, 188, 260][i % 6]}px` }} />
-              <div className="home-skeleton-lines">
-                <div className="home-skeleton-line" />
-                <div className="home-skeleton-line" />
-                <div className="home-skeleton-line" />
-              </div>
-              <div className="home-skeleton-tags">
-                <div className="home-skeleton-tag" />
-                <div className="home-skeleton-tag" />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      {!isLoading && error && (
-        <div className="home-card p-6 text-sm leading-7 text-slate-700">
-          {error}。请确认后端服务正在运行。
-        </div>
-      )}
-      {!isLoading && !error && posts.length === 0 && (
-        <div className="home-card p-6 text-sm leading-7 text-slate-700">
-          还没有文章。进入文章页面后，可以发布第一篇 Markdown 博客。
-        </div>
-      )}
-      {posts.length > 0 && (
-        <div className="home-masonry-feed">
-          {posts.map((post, index) => (
-            <PostCard key={post.id} post={post} index={index} dataReady={dataReady} />
-          ))}
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -742,91 +625,6 @@ function buildPhotoCover(photo: Photo) {
   return `linear-gradient(180deg, rgb(15 23 42 / 0), rgb(15 23 42 / 0.42)), url("${imageUrl}")`;
 }
 
-function ProfileCard({
-  user,
-  settings,
-  onEdit,
-  index = 0,
-}: {
-  user: AuthUser | null;
-  settings: ProfileSettings;
-  onEdit: () => void;
-  index?: number;
-}) {
-  const displayName = settings.displayName || user?.nickname || user?.email?.split("@", 1)[0] || "Skyler";
-  const email = settings.email || user?.email || "";
-  const intro = settings.intro || DEFAULT_PROFILE_SETTINGS.intro;
-  const initial = displayName.slice(0, 1).toUpperCase();
-  const links = [
-    { label: "Github", icon: "github" as const, href: settings.githubUrl },
-    { label: "邮箱", icon: "mail" as const, href: email ? `mailto:${email}` : "" },
-    { label: "QQ", icon: "qq" as const, href: settings.qqUrl },
-  ];
-
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onEdit();
-    }
-  };
-
-  return (
-    <div
-      className="home-card card-fly-in profile-card-button p-4 text-center"
-      style={{ animationDelay: `${index * 80}ms` }}
-      role="button"
-      tabIndex={0}
-      onClick={onEdit}
-      onKeyDown={handleKeyDown}
-      aria-label="编辑个人卡片"
-    >
-      <div className="profile-avatar-frame mx-auto">
-        {settings.avatarUrl ? (
-          <span
-            className="profile-avatar-image"
-            role="img"
-            aria-label={`${displayName} 的头像`}
-            style={{ backgroundImage: `url("${settings.avatarUrl}")` }}
-          />
-        ) : (
-          <span>{initial}</span>
-        )}
-      </div>
-      <h2 className="mt-4 truncate text-xl font-bold">{displayName}</h2>
-      <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-emerald-400" />
-      <p className="mt-3 line-clamp-3 text-xs leading-5 text-slate-700">{intro}</p>
-      <div className="mt-4 grid grid-cols-3 gap-2.5">
-        {links.map((item) => (
-          item.href ? (
-            <a
-              key={item.label}
-              href={item.href}
-              className="home-contact-icon-button"
-              target={item.href.startsWith("http") ? "_blank" : undefined}
-              rel={item.href.startsWith("http") ? "noreferrer" : undefined}
-              onClick={(event) => event.stopPropagation()}
-              aria-label={item.label}
-              title={item.label}
-            >
-              <ContactIcon name={item.icon} />
-            </a>
-          ) : (
-            <span
-              key={item.label}
-              className="home-contact-icon-button profile-link-disabled"
-              aria-label={item.label}
-              title={item.label}
-            >
-              <ContactIcon name={item.icon} />
-            </span>
-          )
-        ))}
-      </div>
-      <p className="mt-3 text-[11px] font-semibold text-emerald-600/80">点击卡片编辑资料</p>
-    </div>
-  );
-}
-
 function ContactIcon({ name }: { name: "github" | "mail" | "qq" }) {
   if (name === "github") {
     return (
@@ -1054,125 +852,6 @@ function PostCard({ post, index, dataReady = true }: { post: BlogPost; index: nu
       </article>
     </Link>
   );
-}
-
-function StatsCard({ stats, index = 0, dataReady = true }: { stats: string[][]; index?: number; dataReady?: boolean }) {
-  return (
-    <div className={`home-card p-4 ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: `${index * 80}ms` } : undefined}>
-      <h2 className="home-section-title">站点统计</h2>
-      <div className="mt-3 space-y-2">
-        {stats.map(([label, value]) => (
-          <div key={label} className="flex items-center justify-between text-xs">
-            <span className="text-slate-700">{label}</span>
-            <strong className="text-sm text-slate-900 truncate max-w-[120px]">{value}</strong>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function CalendarCard({ index = 0, dataReady = true }: { index?: number; dataReady?: boolean }) {
-  const today = useMemo(() => stripTime(new Date()), []);
-  const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(today));
-  const [selectedDate, setSelectedDate] = useState(today);
-
-  const calendarCells = useMemo(() => buildCalendarCells(visibleMonth), [visibleMonth]);
-  const monthTitle = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "long" }).format(visibleMonth);
-  const selectedLabel = new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    weekday: "long",
-  }).format(selectedDate);
-
-  const goPreviousMonth = useCallback(() => {
-    setVisibleMonth((current) => addMonths(current, -1));
-  }, []);
-
-  const goNextMonth = useCallback(() => {
-    setVisibleMonth((current) => addMonths(current, 1));
-  }, []);
-
-  const goToday = useCallback(() => {
-    setVisibleMonth(startOfMonth(today));
-    setSelectedDate(today);
-  }, [today]);
-
-  return (
-    <div className={`home-card p-4 ${dataReady ? "card-fly-in" : "card-init-hidden"}`} style={dataReady ? { animationDelay: `${index * 80}ms` } : undefined}>
-      <div className="flex items-center justify-between">
-        <button type="button" className="calendar-nav-button" onClick={goPreviousMonth} aria-label="上个月">
-          ‹
-        </button>
-        <button type="button" className="calendar-title-button" onClick={goToday} title="回到今天">
-          {monthTitle}
-        </button>
-        <button type="button" className="calendar-nav-button" onClick={goNextMonth} aria-label="下个月">
-          ›
-        </button>
-      </div>
-      <div className="mt-3 grid grid-cols-7 gap-1 text-center text-xs text-slate-700">
-        {["日", "一", "二", "三", "四", "五", "六"].map((day) => (
-          <span key={day} className="calendar-weekday">{day}</span>
-        ))}
-        {calendarCells.map((date) => (
-          <button
-            key={date.toISOString()}
-            type="button"
-            className={[
-              "calendar-day-button",
-              isSameMonth(date, visibleMonth) ? "" : "calendar-day-muted",
-              isSameDate(date, today) ? "calendar-day-today" : "",
-              isSameDate(date, selectedDate) ? "calendar-day-selected" : "",
-            ].filter(Boolean).join(" ")}
-            onClick={() => setSelectedDate(date)}
-            aria-pressed={isSameDate(date, selectedDate)}
-            aria-label={new Intl.DateTimeFormat("zh-CN", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            }).format(date)}
-          >
-            {date.getDate()}
-          </button>
-        ))}
-      </div>
-      <div className="calendar-selected-note" suppressHydrationWarning>{selectedLabel}</div>
-    </div>
-  );
-}
-
-function stripTime(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-function startOfMonth(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function addMonths(date: Date, amount: number) {
-  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
-}
-
-function buildCalendarCells(month: Date) {
-  const firstDay = startOfMonth(month);
-  const gridStart = new Date(firstDay);
-  gridStart.setDate(firstDay.getDate() - firstDay.getDay());
-
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(gridStart);
-    date.setDate(gridStart.getDate() + index);
-    return date;
-  });
-}
-
-function isSameMonth(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
-}
-
-function isSameDate(a: Date, b: Date) {
-  return isSameMonth(a, b) && a.getDate() === b.getDate();
 }
 
 function buildProfileSettings(user: AuthUser | null): ProfileSettings {
