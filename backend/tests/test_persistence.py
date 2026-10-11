@@ -51,6 +51,40 @@ def test_production_rejects_local_persistence():
         replace(settings, photo_storage="r2", r2_account_id="", r2_access_key_id="", r2_secret_access_key="", r2_bucket_name="").validate_runtime()
 
 
+def test_missing_photo_storage_does_not_block_registration(environment, monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import main
+    from app.services import photo_storage
+
+    production = replace(
+        settings, deployed=True, database_url="postgresql://example/db",
+        photo_storage="r2", r2_account_id="", r2_access_key_id="",
+        r2_secret_access_key="", r2_bucket_name="",
+    )
+    monkeypatch.setattr(main, "settings", production)
+    monkeypatch.setattr(photo_storage, "settings", production)
+    get_photo_storage.cache_clear()
+    try:
+        # The environment fixture keeps database I/O in a temporary test database.
+        with TestClient(main.create_app()) as client:
+            assert client.get("/api/health").status_code == 200
+            result = client.post("/api/auth/register", json={
+                "email": "new@example.test", "username": "new-user", "password": "test-password",
+            })
+            assert result.status_code == 201
+            login = client.post("/api/auth/login", json={
+                "email": "new@example.test", "password": "test-password",
+            })
+            assert login.status_code == 200
+            response = client.post("/api/photos/upload-url", headers=headers(login.json()), json={
+                "filename": "p.png", "content_type": "image/png", "size": len(IMAGE),
+            })
+            assert response.status_code == 503
+            assert response.json()["detail"] == "Photo storage is not configured"
+    finally:
+        get_photo_storage.cache_clear()
+
+
 def test_local_upload_read_delete_and_ownership(environment):
     client, _, storage, _, auth = environment
     prepare = client.post("/api/photos/upload-url", headers=headers(auth), json={"filename": "photo.png", "content_type": "image/png", "size": len(IMAGE)})

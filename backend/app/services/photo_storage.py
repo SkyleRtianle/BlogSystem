@@ -1,4 +1,5 @@
 import mimetypes
+import logging
 import uuid
 from functools import lru_cache
 from pathlib import Path
@@ -130,5 +131,10 @@ class R2PhotoStorage:
 
 @lru_cache
 def get_photo_storage() -> LocalPhotoStorage | R2PhotoStorage:
-    settings.validate_runtime()
+    try:
+        settings.validate_runtime()
+    except RuntimeError as error:
+        # Validation errors contain variable names, never credential values.
+        logging.getLogger(__name__).warning("Photo storage configuration: %s", error)
+        raise HTTPException(status_code=503, detail="Photo storage is not configured") from error
     return R2PhotoStorage(settings) if settings.photo_storage == "r2" else LocalPhotoStorage(settings)

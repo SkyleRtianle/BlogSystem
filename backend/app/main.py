@@ -13,7 +13,9 @@ from app.db.session import init_db
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    settings.validate_runtime()
+    # Accounts and posts do not depend on photo storage. Validate storage only
+    # when a photo operation needs it, so an unconfigured bucket cannot block login.
+    settings.validate_database()
     init_db()
     yield
 

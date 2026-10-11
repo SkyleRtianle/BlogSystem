@@ -4,20 +4,12 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getAuthToken, saveAuthSession } from "@/lib/auth";
+import { readAuthResponse } from "@/lib/authResponse";
 
 type AuthMode = "login" | "register";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function getAuthErrorMessage(status: number, detail: unknown, isLogin: boolean) {
-  if (status === 409) return "这个邮箱已经注册过，请直接登录";
-  if (status === 422) return "请检查邮箱格式，密码至少需要 6 位";
-  if (status === 401) return "邮箱或密码不正确";
-
-  if (typeof detail === "string") return detail;
-  return isLogin ? "登录失败，请检查邮箱和密码" : "注册失败，请检查表单内容";
-}
 
 export default function Home() {
   const router = useRouter();
@@ -82,16 +74,13 @@ export default function Home() {
         }),
       });
 
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        throw new Error(getAuthErrorMessage(response.status, errorBody?.detail, isLogin));
-      }
-
-      const session = await response.json();
+      const session = await readAuthResponse(response, isLogin);
       saveAuthSession(session);
       router.replace("/wallpaper");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "请求失败，请确认后端服务正在运行");
+      setMessage(error instanceof TypeError
+        ? "无法连接账号服务，请检查网络或联系管理员检查 API 地址"
+        : error instanceof Error ? error.message : "请求失败，请稍后重试");
     } finally {
       setIsSubmitting(false);
     }

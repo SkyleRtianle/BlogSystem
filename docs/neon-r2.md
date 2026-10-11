@@ -87,6 +87,25 @@ R2 在免费存储和请求额度内不收费，超额会按量收费。创建�
 可以填写 `https://images.example.com`。不填写时使用私有桶签名下载地址。
 不要把 S3 API endpoint 填成公共域名。
 
+### 页面能打开，但注册失败
+
+前端构建成功不代表后端已正常启动。本地 `.env` 不会自动成为 Vercel 的环境变量；
+缺少 `DATABASE_URL` 时，后端会在启动检查中报错，注册接口无法使用。
+旧版代码还会因为 R2 配置缺失阻止整个后端启动；现已将照片配置检查移到照片接口，
+只接入 Neon 也可使用注册、登录和文章功能，照片接口在未配置存储时返回 503。
+旧版注册页可能将服务故障显示成“注册失败，请检查表单内容”。
+
+先完成上表配置，确保变量作用于实际部署的 Production 或 Preview 环境，然后
+重新部署。访问 `https://你的域名/api/health`，正常应返回 `{"status":"ok"}`。
+如果仍失败，在 Vercel 项目的 **Logs** 中查看该请求对应的后端错误；
+`Production requires a Neon PostgreSQL DATABASE_URL` 表示数据库连接串缺失或格式不正确，
+`Missing R2 configuration` 会列出照片功能缺少的变量名称。
+如果 API 返回 404 或网站 HTML，检查项目 Root Directory 是否为仓库根目录，
+以及部署是否包含根目录的 `vercel.json`。不要在生产环境把
+`NEXT_PUBLIC_API_BASE_URL` 设置为 `localhost` 或 `127.0.0.1`。
+
+[Vercel 函数日志文档](https://vercel.com/docs/functions/logs)
+
 ## 5. 本地测试 Neon + R2
 
 参考 `backend/.env.neon-r2.example`，将真实值填入 `backend/.env`（已有文件请先备份）。

@@ -44,10 +44,14 @@ class Settings:
             )
             object.__setattr__(self, "cors_origins", _split_csv(origins))
 
-    def validate_runtime(self) -> None:
+    def validate_database(self) -> None:
         if self.deployed:
             if not self.database_url.startswith(("postgres://", "postgresql://", "postgresql+psycopg://")):
                 raise RuntimeError("Production requires a Neon PostgreSQL DATABASE_URL; local SQLite is only for development")
+
+    def validate_runtime(self) -> None:
+        self.validate_database()
+        if self.deployed:
             if self.photo_storage != "r2":
                 raise RuntimeError("Production requires PHOTO_STORAGE=r2")
         if self.photo_storage not in {"local", "r2"}:
